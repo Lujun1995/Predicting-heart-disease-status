@@ -7,6 +7,39 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(caret)
+```
 
+## data cleaning
+```{r}
+heart_disease = read_csv("./data/heart.csv")
+set.seed(1)
+trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
+train = heart_disease[trRows,]
+test = heart_disease[-trRows,]
+
+train = train %>% 
+    mutate(cp=as.factor(cp),
+           restecg=as.factor(restecg),
+           slope=as.factor(slope),
+           thal=as.factor(thal))
+train.x <- model.matrix(target~.,train)[,-1]
+train.y <- train$target
+
+test = test %>% 
+    mutate(cp=as.factor(cp),
+           restecg=as.factor(restecg),
+           slope=as.factor(slope),
+           thal=as.factor(thal))
+test.x <- model.matrix(target~.,test)[,-1]
+test.y <- test$target
+```
+
+## PCA
+```{r}
+pca <- prcomp(dat1)
+pca$rotation
+pca$sdev
 ```
 
