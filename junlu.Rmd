@@ -6,7 +6,8 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = F)
 library(tidyverse)
 library(caret)
 library(factoextra)
@@ -34,36 +35,89 @@ test = test %>%
            restecg=as.factor(restecg),
            slope=as.factor(slope),
            thal=as.factor(thal))
+
 test.x <- model.matrix(target~.,test)[,-1]
 test.y <- test$target
+
+train = train %>% mutate(target=as.factor(target))
+test = test %>% mutate(target=as.factor(target))
 ```
 
-## PCA
-```{r}
-pca <- prcomp(dat1)
-pca$rotation
-pca$sdev
-```
 
 ## K-means
 ```{r}
 set.seed(1)
 
-km <- kmeans(train.x, centers = 2, nstart = 20)
+train.x_scale = scale(train.x)
 
-km
+rownames(train.x_scale) = paste(train$target, 1:228, sep = "-")
 
-km_vis <- fviz_cluster(list(data = train.x, cluster = km$cluster),
+
+km = kmeans(train.x_scale, centers = 2, nstart = 20)
+km_vis = fviz_cluster(list(data = train.x_scale, 
+                            cluster = km$cluster),
                        ellipse.type = "convex",
                        geom = c("point","text"),
                        labelsize = 5,palette = "Dark2") + 
     labs(title = "K-means")
+
+km_vis
+```
+
+```{r}
+
+train_kmeans = train
+train_kmeans$kmean = km$cluster
+train_kmeans %>% ggplot(aes(x = target, fill = target)) +
+    geom_bar() +
+    facet_grid(.~kmean)
+
+km$centers  # %>% knitr::kable()
+
+center = t(apply(km$centers, 1, function(r)r*attr(train.x_scale,'scaled:scale') + attr(train.x_scale, 'scaled:center')))
+```
+
+
+```{r}
+train_continu = train[c(1,4,5,8,10,12)]
+set.seed(1)
+
+train_continu_scale = scale(train_continu)
+
+rownames(train_continu_scale) = paste(train$target, 1:228, sep = "-")
+
+km_vis = fviz_cluster(list(data = train_continu_scale, 
+                            cluster = km$cluster),
+                       ellipse.type = "convex",
+                       geom = c("point","text"),
+                       labelsize = 5,palette = "Dark2") + 
+    labs(title = "K-means")
+
 km_vis
 ```
 
 
+```{r}
+km_c = kmeans(train_continu, centers = 2, nstart = 20)
+train_kmeans_c = train
+train_kmeans_c$kmean = km_c$cluster
+train_kmeans_c %>% ggplot(aes(x = target, fill = target)) +
+    geom_bar() +
+    facet_grid(.~kmean)
+```
+
+
+
+change to dummy
+?can k-means apply to
+
+
+
+
 ## Regularized logistic
 ```{r}
+train.y = factor(train.y, labels = c("absence","presence"))
+
 ctrl = trainControl(method = "cv",
                     classProbs = TRUE)
 set.seed(1)
@@ -72,23 +126,26 @@ glmnGrid <- expand.grid(.alpha = seq(0, 0.5, length = 10),
                         .lambda = exp(seq(-10,-1, length = 100)))
 
 model.glm <- train(x = train.x,
-                   y = factor(train.y, label = c("pre", "ab")),
+                   y = train.y,
                    method = "glmnet",
                    tuneGrid = glmnGrid,
                    metric = "Accuracy",
                    trControl = ctrl)
 ```
 
+
 ```{r}
-ggplot(model.glm, highlight = T)
+ggplot(model.glm, highlight = T) + 
+    scale_shape_manual(values = rep(19,10),guide = FALSE)
+
 model.glm$bestTune
 ```
 
 ## LDA
 ```{r}
 set.seed(1)
-model.lda <- train(x = train.x,
-                  y = factor(train.y, label = c("pre", "ab")),
+model.lda = train(x = train.x,
+                   y = train.y,
                   method = "lda",
                   metric = "Accuracy",
                   trControl = ctrl)
@@ -97,24 +154,40 @@ model.lda <- train(x = train.x,
 ## QDA
 ```{r}
 set.seed(1)
-model.qda <- train(x = train.x,
-                  y = factor(train.y, label = c("pre", "ab")),
+model.qda = train(x = train.x,
+                   y = train.y,
                   method = "qda",
                   metric = "Accuracy",
                   trControl = ctrl)
 ```
+lda qda
 
 
+## Naive bayes
+```{r}
+set.seed(1)
+nbGrid = expand.grid(usekernel = c(FALSE,TRUE),
+                     fL = 1, adjust = seq(0, 4, length = 20))
+model.bayes = train(x = train.x,
+                    y = train.y,
+                    method = "nb",
+                    tuneGrid = nbGrid,
+                    metric = "Accuracy",
+                    trControl = ctrl) 
+
+ggplot(model.bayes, highlight = T)
+```
 
 
 ## resam
 ```{r}
 resamp <- resamples(list(glm.fit = model.glm,
-                         lda.fit = model.lda
+                         lda.fit = model.lda,
+                         qda.fit = model.qda,
+                         bayes.fit = model.bayes
                          ))
 
 bwplot(resamp)
-
 summary(resamp)
 ```
 
