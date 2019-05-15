@@ -1,0 +1,121 @@
+---
+title: "DSII"
+author: "Jun Lu"
+date: "5/14/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(caret)
+library(factoextra)
+library(gridExtra)
+```
+
+## data cleaning
+```{r}
+heart_disease = read_csv("./data/heart.csv")
+set.seed(1)
+trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
+train = heart_disease[trRows,]
+test = heart_disease[-trRows,]
+
+train = train %>% 
+    mutate(cp=as.factor(cp),
+           restecg=as.factor(restecg),
+           slope=as.factor(slope),
+           thal=as.factor(thal))
+train.x <- model.matrix(target~.,train)[,-1]
+train.y <- train$target
+
+test = test %>% 
+    mutate(cp=as.factor(cp),
+           restecg=as.factor(restecg),
+           slope=as.factor(slope),
+           thal=as.factor(thal))
+test.x <- model.matrix(target~.,test)[,-1]
+test.y <- test$target
+```
+
+## PCA
+```{r}
+pca <- prcomp(dat1)
+pca$rotation
+pca$sdev
+```
+
+## K-means
+```{r}
+set.seed(1)
+
+km <- kmeans(train.x, centers = 2, nstart = 20)
+
+km
+
+km_vis <- fviz_cluster(list(data = train.x, cluster = km$cluster),
+                       ellipse.type = "convex",
+                       geom = c("point","text"),
+                       labelsize = 5,palette = "Dark2") + 
+    labs(title = "K-means")
+km_vis
+```
+
+
+## Regularized logistic
+```{r}
+ctrl = trainControl(method = "cv",
+                    classProbs = TRUE)
+set.seed(1)
+
+glmnGrid <- expand.grid(.alpha = seq(0, 0.5, length = 10),
+                        .lambda = exp(seq(-10,-1, length = 100)))
+
+model.glm <- train(x = train.x,
+                   y = factor(train.y, label = c("pre", "ab")),
+                   method = "glmnet",
+                   tuneGrid = glmnGrid,
+                   metric = "Accuracy",
+                   trControl = ctrl)
+```
+
+```{r}
+ggplot(model.glm, highlight = T)
+model.glm$bestTune
+```
+
+## LDA
+```{r}
+set.seed(1)
+model.lda <- train(x = train.x,
+                  y = factor(train.y, label = c("pre", "ab")),
+                  method = "lda",
+                  metric = "Accuracy",
+                  trControl = ctrl)
+```
+
+## QDA
+```{r}
+set.seed(1)
+model.qda <- train(x = train.x,
+                  y = factor(train.y, label = c("pre", "ab")),
+                  method = "qda",
+                  metric = "Accuracy",
+                  trControl = ctrl)
+```
+
+
+
+
+## resam
+```{r}
+resamp <- resamples(list(glm.fit = model.glm,
+                         lda.fit = model.lda
+                         ))
+
+bwplot(resamp)
+
+summary(resamp)
+```
+
+
