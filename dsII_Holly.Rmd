@@ -9,6 +9,8 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(caret)
+library(factoextra)
+library(e1071)
 ```
 
 ## data cleaning
@@ -38,8 +40,62 @@ test.y <- test$target
 
 ## PCA
 ```{r}
-pca <- prcomp(dat1)
-pca$rotation
-pca$sdev
+pca <- prcomp(train.x)
+fviz_eig(pca, addlabels = TRUE)
+fviz_pca_ind(pca,
+             habillage = train.y,
+             label = "none",
+             addEllipses = TRUE)
+```
+
+## SVM
+```{r}
+train = train %>% mutate(target=as.factor(target))
+test = test %>% mutate(target=as.factor(target))
+## linear boundary
+ctrl <- trainControl(method = "cv")
+
+set.seed(1)
+svml.fit <- train(target~., 
+                  data = train, 
+                  method = "svmLinear2",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = data.frame(cost = exp(seq(-5,1,len=30))),
+                  trControl = ctrl)
+
+ggplot(svml.fit, highlight = TRUE)
+svml.fit$bestTune
+
+## radial kernel
+svmr.grid <- expand.grid(C = exp(seq(-4,5,len=50)),
+                         sigma = exp(seq(-8,-3,len=5)))
+set.seed(1)             
+svmr.fit <- train(target~., 
+                  data = train,
+                  method = "svmRadial",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = svmr.grid,
+                  trControl = ctrl)
+
+ggplot(svmr.fit, highlight = TRUE)
+
+resamp <- resamples(list(svmr = svmr.fit, svml = svml.fit))
+bwplot(resamp)
+summary(resamp)
+
+## test data performance
+pred.svml <- predict(svml.fit, newdata = test)
+pred.svmr <- predict(svmr.fit, newdata = test)
+
+confusionMatrix(data = pred.svml, 
+                reference = test$target)
+
+confusionMatrix(data = pred.svmr, 
+                reference = test$target)
+```
+
+## Neural network
+```{r}
+
 ```
 
