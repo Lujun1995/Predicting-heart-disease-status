@@ -39,8 +39,102 @@ test = test %>%
 test.x <- model.matrix(target~.,test)[,-1]
 test.y <- test$target
 
-train = train %>% mutate(target=as.factor(target))
-test = test %>% mutate(target=as.factor(target))
+train = train %>% 
+    mutate(target = factor(target, labels = c("Absence", "Presence")))
+test = test %>% 
+    mutate(target = factor(target, labels = c("Absence", "Presence")))
+```
+
+
+## EDA
+
+### continuous
+```{r}
+train %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = target, y = value, fill = target)) +
+    geom_boxplot(alpha = 0.5) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+```
+
+
+```{r}
+train %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = value, fill = target)) +
+    geom_density(alpha = 0.5) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+```
+
+
+### corr matrix
+```{r}
+library(ggcorrplot)
+train_continu = 
+    train%>%
+    select(age, trestbps, chol, thalach, oldpeak)
+corr =  round(cor(train_continu), 4)
+
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   outline.col = "white",
+   ggtheme = ggplot2::theme_bw,
+   lab = T,
+   colors = c("#6D9EC1", "white", "#E46726"))   
+```
+
+
+
+### categorical
+```{r}
+train %>%
+    select(sex, cp, fbs, restecg, exang, slope, ca, thal, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = value, fill = target)) +
+    geom_bar(alpha = 0.5) +
+    facet_grid(.~target) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+```
+
+
+```{r}
+train$sex = factor(train$sex, labels = c("female", "male"))
+
+barplot = function(var){
+    ggplot(train, aes_string(x = var,  group = "target")) + 
+    geom_bar(aes(y = ..prop.., fill = factor(..x..)),
+             stat = "count", alpha = 0.5) +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y = ..prop.. ), 
+              stat = "count", vjust = 0, size = 2) +
+    labs(y = "Percent", fill = var) +
+    facet_grid(~target) +
+    scale_y_continuous(labels = scales::percent) +
+        theme_bw()
+}
+
+a1 = barplot("sex")
+a2 = barplot("fbs")
+a3 = barplot("exang")
+a4 = barplot("slope")
+a5 = barplot("thal")
+a6 = barplot("restecg")
+a7 = barplot("cp")
+a8 = barplot("ca")
+
+gridExtra::grid.arrange(a1, a2, a3, a4,
+                        a5, a6, a7, a8,
+                        ncol = 3, nrow = 3)
+```
+
+
+### check missing value
+```{r}
+sapply(X = train, FUN = function(x) sum(is.na(x)))
 ```
 
 
@@ -107,9 +201,6 @@ train_kmeans_c %>% ggplot(aes(x = target, fill = target)) +
 ```
 
 
-
-change to dummy
-?can k-means apply to
 
 
 
