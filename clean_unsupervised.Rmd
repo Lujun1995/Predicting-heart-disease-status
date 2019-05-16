@@ -199,7 +199,7 @@ train_1 = train %>%
     mutate(target = ifelse(target == "absence",1,0))
 train.hc = train.x %>% as.data.frame() %>% 
     mutate(target = as.character(train_1$target),
-           num =as.character(1:228)) %>% 
+           num = as.character(1:228)) %>% 
     mutate(name = paste(target,".", num)) %>% 
     select(-num, -target) %>% 
     column_to_rownames(var = "name") %>% scale()
