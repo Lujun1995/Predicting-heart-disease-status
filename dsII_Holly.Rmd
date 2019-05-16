@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(caret)
 library(factoextra)
+library(gridExtra)
 library(e1071)
 library(pROC)
 ```
@@ -17,7 +18,7 @@ library(pROC)
 ## data cleaning
 ```{r}
 heart_disease = read_csv("./data/heart.csv") %>% 
-    mutate(target=ifelse(target==1, "neg", "pos"))
+    mutate(target=ifelse(target==1, "absence", "presence"))
 set.seed(1)
 trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
 train = heart_disease[trRows,]
@@ -45,6 +46,31 @@ test = test %>%
 test.x <- model.matrix(target~.,test)[,-1]
 test.y <- test$target
 ```
+
+## EDA
+
+### continuous
+```{r}
+train %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = target, y = value, fill = target)) +
+    geom_boxplot(alpha = 0.5) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+
+train %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = value, fill = target)) +
+    geom_density(alpha = 0.5) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+
+
+```
+
+
 
 ## PCA
 ```{r}
