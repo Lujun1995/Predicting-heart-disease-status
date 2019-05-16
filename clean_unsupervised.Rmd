@@ -14,6 +14,9 @@ library(gridExtra)
 library(corrplot)
 library(RColorBrewer)
 library(gplots)
+library(tableone)
+library(officer)
+library(magrittr)
 
 
 knitr::opts_chunk$set(
@@ -27,36 +30,35 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ## data cleaning
 ```{r}
 heart_disease = read_csv("./data/heart.csv") %>% 
-    mutate(target=ifelse(target==1, "absence", "presence"))
+    mutate(target = ifelse(target == 1, "absence", "presence")) %>% 
+    mutate(sex = as.factor(sex),
+           cp = as.factor(cp),
+           fbs = as.factor(fbs),
+           restecg = as.factor(restecg),
+           exang = as.factor(exang),
+           slope = as.factor(slope),
+           thal = as.factor(thal)
+           )
+
 set.seed(1)
 trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
 train = heart_disease[trRows,]
 test = heart_disease[-trRows,]
 
-train = train %>% 
-    mutate(sex=as.factor(sex),
-           cp=as.factor(cp),
-           fbs=as.factor(fbs),
-           restecg=as.factor(restecg),
-           exang=as.factor(exang),
-           slope=as.factor(slope),
-           thal=as.factor(thal))
 train.x <- model.matrix(target~.,train)[,-1]
 train.y <- train$target
 
-test = test %>% 
-    mutate(sex=as.factor(sex),
-           cp=as.factor(cp),
-           fbs=as.factor(fbs),
-           restecg=as.factor(restecg),
-           exang=as.factor(exang),
-           slope=as.factor(slope),
-           thal=as.factor(thal))
+
 test.x <- model.matrix(target~.,test)[,-1]
 test.y <- test$target
 ```
 
 ## EDA
+
+### check missing value
+```{r}
+sapply(X = train, FUN = function(x) sum(is.na(x)))
+```
 
 ### continuous
 ```{r}
@@ -120,10 +122,29 @@ gridExtra::grid.arrange(a1, a2, a3, a4,
                         ncol = 3, nrow = 3)
 ```
 
-### check missing value
+## tableone
+
 ```{r}
-sapply(X = train, FUN = function(x) sum(is.na(x)))
+vars = names(train)[-14]
+tableOne = CreateTableOne(vars = c("age", "trestbps", "chol", "thalach",
+                                   "oldpeak", "sex", "exang", "fbs", 
+                                   "slope", "thal", "restecg", "cp","ca"
+                                   ), 
+                          strata = c("target"), 
+                          data = train,
+                          factorVars = c("sex", "fbs", "exang", "slope",
+                                         "thal", "restecg", "cp", "ca"))
+print(tableOne, cramVars = c("sex", "exang", "fbs"))
+
+docx( ) %>% 
+     addFlexTable(table1 %>%
+     FlexTable(header.cell.props = cellProperties( background.color = "#003366"),
+               header.text.props = textBold( color = "white" ),
+               add.rownames = TRUE ) %>%
+               setZebraStyle( odd = "#DDDDDD", even = "#FFFFFF" ) ) %>%
+     writeDoc(file = "table1.docx")
 ```
+
 
 ## Unsupervised learning
 
@@ -155,9 +176,10 @@ train_kmeans %>% ggplot(aes(x = target, fill = target)) +
     facet_grid(.~kmean) +
     theme_bw()
 
-km$centers  # %>% knitr::kable()
 
 center = t(apply(km$centers, 1, function(r)r*attr(train.x_scale,'scaled:scale') + attr(train.x_scale, 'scaled:center')))
+
+center
 ```
 
 ## PCA
@@ -171,10 +193,11 @@ fviz_pca_ind(pca,
              addEllipses = TRUE)
 ```
 
+
 ## Hierarchical clustering
 ```{r}
 train_1 = train %>% 
-    mutate(target = ifelse(target=="absence",1,0))
+    mutate(target = ifelse(target == "absence",1,0))
 train.hc = train.x %>% as.data.frame() %>% 
     mutate(target = as.character(train_1$target),
            num =as.character(1:228)) %>% 
