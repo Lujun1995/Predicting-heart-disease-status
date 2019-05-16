@@ -39,8 +39,127 @@ test = test %>%
 test.x <- model.matrix(target~.,test)[,-1]
 test.y <- test$target
 
-train = train %>% mutate(target=as.factor(target))
-test = test %>% mutate(target=as.factor(target))
+train = train %>% 
+    mutate(target = factor(target, level = c(0, 1), 
+           label = c("Presence", "Absence")))
+
+test = test %>% 
+    mutate(target = factor(target, level = c(0, 1), 
+           label = c("Presence", "Absence")))
+```
+
+
+## EDA
+
+### continuous
+
+```{r}
+train %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = target, y = value, fill = target)) +
+    geom_boxplot(alpha = 0.5) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+```
+
+
+
+```{r}
+train %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = value, fill = target)) +
+    geom_density(alpha = 0.5) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+```
+
+```{r}
+train %>% 
+    select(oldpeak, target) %>% 
+    filter(target == 0) %>% 
+    summarise(mean = mean(oldpeak))
+
+train %>% 
+    select(oldpeak, target) %>% 
+    filter(target == 1) %>% 
+    summarise(mean = mean(oldpeak))
+
+```
+
+
+
+
+
+
+### corr matrix
+
+
+
+```{r}
+library(ggcorrplot)
+train_continu = 
+    train%>%
+    select(age, trestbps, chol, thalach, oldpeak)
+corr =  round(cor(train_continu), 4)
+
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   outline.col = "white",
+   ggtheme = ggplot2::theme_bw,
+   lab = T,
+   colors = c("#6D9EC1", "white", "#E46726"))   
+```
+
+
+
+### categorical
+```{r}
+train %>%
+    select(sex, cp, fbs, restecg, exang, slope, ca, thal, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = value, fill = target)) +
+    geom_bar(alpha = 0.5) +
+    facet_grid(.~target) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+```
+
+
+```{r}
+train$sex = factor(train$sex, labels = c("female", "male"))
+
+barplot = function(var){
+    ggplot(train, aes_string(x = var,  group = "target")) + 
+    geom_bar(aes(y = ..prop.., fill = factor(..x..)),
+             stat = "count", alpha = 0.5) +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y = ..prop.. ), 
+              stat = "count", vjust = 0, size = 2) +
+    labs(y = "Percent", fill = var) +
+    facet_grid(~target) +
+    scale_y_continuous(labels = scales::percent) +
+        theme_bw()
+}
+
+a1 = barplot("sex")
+a2 = barplot("fbs")
+a3 = barplot("exang")
+a4 = barplot("slope")
+a5 = barplot("thal")
+a6 = barplot("restecg")
+a7 = barplot("cp")
+a8 = barplot("ca")
+
+gridExtra::grid.arrange(a1, a2, a3, a4,
+                        a5, a6, a7, a8,
+                        ncol = 3, nrow = 3)
+```
+
+
+### check missing value
+```{r}
+sapply(X = train, FUN = function(x) sum(is.na(x)))
 ```
 
 
@@ -64,13 +183,14 @@ km_vis = fviz_cluster(list(data = train.x_scale,
 km_vis
 ```
 
-```{r}
 
+```{r}
 train_kmeans = train
 train_kmeans$kmean = km$cluster
 train_kmeans %>% ggplot(aes(x = target, fill = target)) +
-    geom_bar() +
-    facet_grid(.~kmean)
+    geom_bar(alpha = 0.5) +
+    facet_grid(.~kmean) +
+    theme_bw()
 
 km$centers  # %>% knitr::kable()
 
@@ -108,18 +228,16 @@ train_kmeans_c %>% ggplot(aes(x = target, fill = target)) +
 
 
 
-change to dummy
-?can k-means apply to
-
 
 
 
 ## Regularized logistic
 ```{r}
-train.y = factor(train.y, labels = c("absence","presence"))
+train.y = factor(train.y, labels = c("absence", "presence"))
 
 ctrl = trainControl(method = "cv",
-                    classProbs = TRUE)
+                    classProbs = TRUE,
+                    summaryFunction = twoClassSummary)
 set.seed(1)
 
 glmnGrid <- expand.grid(.alpha = seq(0, 0.5, length = 10),
@@ -129,7 +247,7 @@ model.glm <- train(x = train.x,
                    y = train.y,
                    method = "glmnet",
                    tuneGrid = glmnGrid,
-                   metric = "Accuracy",
+                   metric = "ROC",
                    trControl = ctrl)
 ```
 
@@ -147,7 +265,7 @@ set.seed(1)
 model.lda = train(x = train.x,
                    y = train.y,
                   method = "lda",
-                  metric = "Accuracy",
+                  metric = "ROC",
                   trControl = ctrl)
 ```
 
@@ -157,7 +275,7 @@ set.seed(1)
 model.qda = train(x = train.x,
                    y = train.y,
                   method = "qda",
-                  metric = "Accuracy",
+                  metric = "ROC",
                   trControl = ctrl)
 ```
 lda qda
@@ -172,7 +290,7 @@ model.bayes = train(x = train.x,
                     y = train.y,
                     method = "nb",
                     tuneGrid = nbGrid,
-                    metric = "Accuracy",
+                    metric = "ROC",
                     trControl = ctrl) 
 
 ggplot(model.bayes, highlight = T)
