@@ -17,7 +17,7 @@ library(gplots)
 library(tableone)
 library(flextable)
 library(magrittr)
-
+library(officer)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -62,7 +62,7 @@ sapply(X = train, FUN = function(x) sum(is.na(x)))
 
 ### continuous
 ```{r}
-train %>%
+heart_disease %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
     gather(-target, key = "var", value = "value") %>% 
     ggplot(aes(x = target, y = value, fill = target)) +
@@ -70,7 +70,7 @@ train %>%
     facet_wrap(~ var, scales = "free") +
     theme_bw()
 
-train %>%
+heart_disease %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
     gather(-target, key = "var", value = "value") %>% 
     ggplot(aes(x = value, fill = target)) +
@@ -82,9 +82,9 @@ train %>%
 ### corr matrix
 ```{r}
 library(ggcorrplot)
-train_continu = train %>%
+heart_continu = heart_disease %>%
     select(age, trestbps, chol, thalach, oldpeak)
-corr =  round(cor(train_continu), 4)
+corr =  round(cor(heart_continu), 4)
 
 ggcorrplot(corr, hc.order = TRUE, type = "lower",
    outline.col = "white",
@@ -96,7 +96,7 @@ ggcorrplot(corr, hc.order = TRUE, type = "lower",
 ### categorical
 ```{r}
 barplot = function(var){
-    ggplot(train, aes_string(x = var,  group = "target")) + 
+    ggplot(heart_disease, aes_string(x = var,  group = "target")) + 
     geom_bar(aes(y = ..prop.., fill = factor(..x..)),
              stat = "count", alpha = 0.8) +
     geom_text(aes( label = scales::percent(..prop..),
@@ -125,7 +125,6 @@ gridExtra::grid.arrange(a1, a2, a3, a4,
 ## tableone
 
 ```{r}
-vars = names(train)[-14]
 tableOne = CreateTableOne(vars = c("age", "trestbps", "chol", "thalach",
                                    "oldpeak", "sex", "exang", "fbs", 
                                    "slope", "thal", "restecg", "cp","ca"
@@ -134,6 +133,7 @@ tableOne = CreateTableOne(vars = c("age", "trestbps", "chol", "thalach",
                           data = heart_disease,
                           factorVars = c("sex", "fbs", "exang", "slope",
                                          "thal", "restecg", "cp", "ca"))
+
 table = print(tableOne, cramVars = c("sex", "exang", "fbs"))
 table = as.data.frame(table)
 
@@ -142,14 +142,12 @@ table = table %>%
     select(name, everything())
 
 
-library(officer)
-library(flextable)
+
 mydoc <- read_docx() 
 mydoc = mydoc %>% 
     body_add_flextable(flextable(table))
 
 print(mydoc, target = "./table.docx")
-    
 ```
 
 
