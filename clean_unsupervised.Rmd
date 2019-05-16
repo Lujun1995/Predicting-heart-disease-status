@@ -66,7 +66,7 @@ train %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
     gather(-target, key = "var", value = "value") %>% 
     ggplot(aes(x = target, y = value, fill = target)) +
-    geom_boxplot(alpha = 0.5) +
+    geom_boxplot(alpha = 0.6) +
     facet_wrap(~ var, scales = "free") +
     theme_bw()
 
@@ -74,7 +74,7 @@ train %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
     gather(-target, key = "var", value = "value") %>% 
     ggplot(aes(x = value, fill = target)) +
-    geom_density(alpha = 0.5) +
+    geom_density(alpha = 0.6) +
     facet_wrap(~ var, scales = "free") +
     theme_bw()
 ```
@@ -90,7 +90,7 @@ ggcorrplot(corr, hc.order = TRUE, type = "lower",
    outline.col = "white",
    ggtheme = ggplot2::theme_bw,
    lab = T,
-   colors = c("#6D9EC1", "white", "#E46726"))  
+   colors =  c("#4682B4", "white", "#FF8C00"))  
 ```
 
 ### categorical
@@ -98,7 +98,7 @@ ggcorrplot(corr, hc.order = TRUE, type = "lower",
 barplot = function(var){
     ggplot(train, aes_string(x = var,  group = "target")) + 
     geom_bar(aes(y = ..prop.., fill = factor(..x..)),
-             stat = "count", alpha = 0.5) +
+             stat = "count", alpha = 0.8) +
     geom_text(aes( label = scales::percent(..prop..),
                    y = ..prop.. ), 
               stat = "count", vjust = 0, size = 2) +
@@ -131,7 +131,7 @@ tableOne = CreateTableOne(vars = c("age", "trestbps", "chol", "thalach",
                                    "slope", "thal", "restecg", "cp","ca"
                                    ), 
                           strata = c("target"), 
-                          data = train,
+                          data = heart_disease,
                           factorVars = c("sex", "fbs", "exang", "slope",
                                          "thal", "restecg", "cp", "ca"))
 table = print(tableOne, cramVars = c("sex", "exang", "fbs"))

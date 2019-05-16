@@ -308,8 +308,5 @@ summary(resamp)
 ```
 
 
-## Create onetable
-```{r}
 
-```
 
