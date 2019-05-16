@@ -1,7 +1,7 @@
 ---
-title: "dsII_Holly"
+title: "clean_unsuper"
 author: "Yun He"
-date: "5/14/2019"
+date: "5/15/2019"
 output: pdf_document
 ---
 
@@ -11,8 +11,17 @@ library(tidyverse)
 library(caret)
 library(factoextra)
 library(gridExtra)
-library(e1071)
-library(pROC)
+library(corrplot)
+library(RColorBrewer)
+library(gplots)
+
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ## data cleaning
@@ -162,65 +171,39 @@ fviz_pca_ind(pca,
              addEllipses = TRUE)
 ```
 
-## SVM
+## Hierarchical clustering
 ```{r}
-train = train %>% mutate(target=as.factor(target))
-test = test %>% mutate(target=as.factor(target))
-## linear boundary
-ctrl <- trainControl(method = "cv")
-
-set.seed(1)
-svml.fit <- train(target~., 
-                  data = train, 
-                  method = "svmLinear2",
-                  preProcess = c("center", "scale"),
-                  tuneGrid = data.frame(cost = exp(seq(-5,0,len=50))),
-                  trControl = ctrl)
-
-ggplot(svml.fit, highlight = TRUE)
-svml.fit$bestTune
-
-## radial kernel
-svmr.grid <- expand.grid(C = exp(seq(-4,6,len=50)),
-                         sigma = exp(seq(-10,-3,len=6)))
-set.seed(1)             
-svmr.fit <- train(target~., 
-                  data = train,
-                  method = "svmRadial",
-                  preProcess = c("center", "scale"),
-                  tuneGrid = svmr.grid,
-                  trControl = ctrl)
-
-ggplot(svmr.fit, highlight = TRUE)
-svmr.fit$bestTune
-
-resamp <- resamples(list(svmr = svmr.fit, 
-                         svml = svml.fit))
-bwplot(resamp)
-summary(resamp)
+train_1 = train %>% 
+    mutate(target = ifelse(target=="absence",1,0))
+train.hc = train.x %>% as.data.frame() %>% 
+    mutate(target = as.character(train_1$target),
+           num =as.character(1:228)) %>% 
+    mutate(name = paste(target,".", num)) %>% 
+    select(-num, -target) %>% 
+    column_to_rownames(var = "name") %>% scale()
+    
 ```
 
-## Neural network
 ```{r}
-nnetGrid <- expand.grid(size = seq(from = 1, to = 10, by = 1), 
-                        decay = exp(seq(from = -3, to = 3, length = 30)))
 
-ctrl2 <- trainControl(method = "cv", 
-                      summaryFunction = twoClassSummary,
-                      classProbs = TRUE)
+hc.heart = hclust(dist(train.hc), method = "complete")
 
-set.seed(1)
-cnnet.fit <- train(target~.,
-                   train,
-                   method = "nnet",
-                   tuneGrid = nnetGrid,
-                   preProcess = c("center","scale"),
-                   trControl = ctrl2,
-                   metric = "ROC",
-                   trace = FALSE)
 
-ggplot(cnnet.fit, highlight = TRUE) + scale_shape_manual(values = rep(19,10), 
-                                                         guide = FALSE)
+fviz_dend(hc.heart, k = 4,
+          cex = 0.4,
+          palette = "jco",
+          color_labels_by_k = TRUE,
+          rect = TRUE, rect_fill = TRUE, rect_border = "jco",
+          labels_track_height = 0.8)
 ```
 
+```{r}
+col1 <- colorRampPalette(brewer.pal(9, "GnBu"))(100)
 
+heatmap.2(t(train.hc),
+        col = col1, keysize = 1, key.par = list(cex = .3),
+        cexRow = 1, 
+        #dendrogram = "col",
+        trace = "none", key = TRUE, cexCol = 0.4,
+        margins = c(5, 5))
+```
