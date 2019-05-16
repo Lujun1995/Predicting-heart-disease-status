@@ -40,24 +40,16 @@ heart_disease = read_csv("./data/heart.csv") %>%
            thal = as.factor(thal)
            )
 
-set.seed(1)
-trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
-train = heart_disease[trRows,]
-test = heart_disease[-trRows,]
 
-train.x <- model.matrix(target~.,train)[,-1]
-train.y <- train$target
-
-
-test.x <- model.matrix(target~.,test)[,-1]
-test.y <- test$target
+model.x <- model.matrix(target~.,heart_disease)[,-1]
+model.y <- heart_disease$target
 ```
 
 ## EDA
 
 ### check missing value
 ```{r}
-sapply(X = train, FUN = function(x) sum(is.na(x)))
+sapply(X = heart_disease, FUN = function(x) sum(is.na(x)))
 ```
 
 ### continuous
@@ -157,43 +149,45 @@ print(mydoc, target = "./table.docx")
 ```{r}
 set.seed(1)
 
-train.x_scale = scale(train.x)
+model.x_scale = scale(model.x)
 
-rownames(train.x_scale) = paste(train$target, 1:228, sep = "-")
+rownames(model.x_scale) = paste(heart_disease$target, 1:228, sep = "-")
 
 
-km = kmeans(train.x_scale, centers = 2, nstart = 20)
-km_vis = fviz_cluster(list(data = train.x_scale, 
+km = kmeans(model.x_scale, centers = 2, nstart = 20)
+km_vis = fviz_cluster(list(data = model.x_scale, 
                             cluster = km$cluster),
                        ellipse.type = "convex",
                        geom = c("point","text"),
-                       labelsize = 5,palette = "Dark2") + 
+                       ggtheme = theme_bw(),
+                       labelsize = 7, palette = "Dark2") + 
     labs(title = "K-means")
 
 km_vis
 ```
 
+
 ```{r}
-train_kmeans = train
-train_kmeans$kmean = km$cluster
-train_kmeans %>% ggplot(aes(x = target, fill = target)) +
+heart_kmeans = heart_disease
+heart_kmeans$kmean = km$cluster
+heart_kmeans %>% ggplot(aes(x = target, fill = target)) +
     geom_bar(alpha = 0.5) +
     facet_grid(.~kmean) +
     theme_bw()
 
 
-center = t(apply(km$centers, 1, function(r)r*attr(train.x_scale,'scaled:scale') + attr(train.x_scale, 'scaled:center')))
+center = t(apply(km$centers, 1, function(r)r*attr(model.x_scale,'scaled:scale') + attr(model.x_scale, 'scaled:center')))
 
 center
 ```
 
 ## PCA
 ```{r}
-train.x = scale(train.x)
-pca <- prcomp(train.x)
+pca <- prcomp(model.x_scale)
 fviz_eig(pca, addlabels = TRUE)
+
 fviz_pca_ind(pca,
-             habillage = train.y,
+             habillage = model.y,
              label = "none",
              addEllipses = TRUE)
 ```
@@ -201,11 +195,11 @@ fviz_pca_ind(pca,
 
 ## Hierarchical clustering
 ```{r}
-train_1 = train %>% 
+hd_1 = heart_disease %>% 
     mutate(target = ifelse(target == "absence",1,0))
-train.hc = train.x %>% as.data.frame() %>% 
-    mutate(target = as.character(train_1$target),
-           num =as.character(1:228)) %>% 
+train.hc = model.x_scale %>% as.data.frame() %>% 
+    mutate(target = as.character(hd_1$target),
+           num = as.character(1:303)) %>% 
     mutate(name = paste(target,".", num)) %>% 
     select(-num, -target) %>% 
     column_to_rownames(var = "name") %>% scale()
