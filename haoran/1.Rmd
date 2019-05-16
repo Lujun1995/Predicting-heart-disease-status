@@ -1,0 +1,115 @@
+---
+title: '1'
+author: "Haoran Hu"
+date: "2019-5-1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ISLR)
+library(factoextra)
+library(gridExtra)
+library(corrplot)
+library(RColorBrewer)
+library(gplots)
+library(tidyverse)
+library(caret)
+library(MLmetrics)
+library(rpart.plot)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+
+```
+
+```{r}
+heart_disease = read_csv("..\\data\\heart.csv") %>% 
+    mutate(target=ifelse(target==1, "absence", "presence"))
+set.seed(1)
+#trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
+#train = heart_disease[trRows,]
+#test = heart_disease[-trRows,]
+
+heart_disease = heart_disease %>% 
+    mutate(sex=as.factor(sex),
+           cp=as.factor(cp),
+           fbs=as.factor(fbs),
+           restecg=as.factor(restecg),
+           exang=as.factor(exang),
+           slope=as.factor(slope),
+           thal=as.factor(thal))
+model.x <- model.matrix(target~.,heart_disease)[,-1]
+model.y <- heart_disease$target
+
+# test = test %>% 
+#     mutate(sex=as.factor(sex),
+#            cp=as.factor(cp),
+#            fbs=as.factor(fbs),
+#            restecg=as.factor(restecg),
+#            exang=as.factor(exang),
+#            slope=as.factor(slope),
+#            thal=as.factor(thal))
+# test.x <- model.matrix(target~.,test)[,-1]
+# test.y <- test$target
+```
+
+## Regularized logistic
+```{r}
+ctrl = trainControl(method = "cv",
+                    classProbs = TRUE,
+                    summaryFunction = twoClassSummary)
+set.seed(1)
+
+glmnGrid <- expand.grid(.alpha = seq(0, 0.5, length = 10),
+                        .lambda = exp(seq(-10,-1, length = 100)))
+
+model.glm <- train(x = model.x,
+                   y = model.y,
+                   method = "glmnet",
+                   tuneGrid = glmnGrid,
+                   metric = "ROC",
+                   trControl = ctrl)
+```
+
+
+```{r}
+ggplot(model.glm, highlight = T)  +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,10))
+
+model.glm$bestTune
+```
+
+## LDA
+```{r, message=FALSE}
+set.seed(1)
+model.lda = train(x = model.x,
+                   y = model.y,
+                  method = "lda",
+                  metric = "ROC",
+                  trControl = ctrl)
+```
+
+
+## Naive bayes
+```{r, warning=FALSE}
+set.seed(1)
+nbGrid = expand.grid(usekernel = c(FALSE,TRUE),
+                     fL = 1, adjust = seq(0, 4, length = 20))
+model.bayes = train(x = model.x,
+                    y = model.y,
+                    method = "nb",
+                    tuneGrid = nbGrid,
+                    metric = "ROC",
+                    trControl = ctrl) 
+
+ggplot(model.bayes, highlight = T)
+
+model.bayes$bestTune
+```
