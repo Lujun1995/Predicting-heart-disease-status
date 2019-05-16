@@ -15,7 +15,7 @@ library(corrplot)
 library(RColorBrewer)
 library(gplots)
 library(tableone)
-library(officer)
+library(flextable)
 library(magrittr)
 
 
@@ -134,15 +134,22 @@ tableOne = CreateTableOne(vars = c("age", "trestbps", "chol", "thalach",
                           data = train,
                           factorVars = c("sex", "fbs", "exang", "slope",
                                          "thal", "restecg", "cp", "ca"))
-print(tableOne, cramVars = c("sex", "exang", "fbs"))
+table = print(tableOne, cramVars = c("sex", "exang", "fbs"))
+table = as.data.frame(table)
 
-docx( ) %>% 
-     addFlexTable(table1 %>%
-     FlexTable(header.cell.props = cellProperties( background.color = "#003366"),
-               header.text.props = textBold( color = "white" ),
-               add.rownames = TRUE ) %>%
-               setZebraStyle( odd = "#DDDDDD", even = "#FFFFFF" ) ) %>%
-     writeDoc(file = "table1.docx")
+table = table %>% 
+    mutate(name = rownames(table)) %>% 
+    select(name, everything())
+
+
+library(officer)
+library(flextable)
+mydoc <- read_docx() 
+mydoc = mydoc %>% 
+    body_add_flextable(flextable(table))
+
+print(mydoc, target = "./table.docx")
+    
 ```
 
 
