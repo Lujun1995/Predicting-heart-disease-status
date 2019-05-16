@@ -63,8 +63,6 @@ train %>%
     theme_bw()
 ```
 
-
-
 ```{r}
 train %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
@@ -309,4 +307,9 @@ bwplot(resamp)
 summary(resamp)
 ```
 
+
+## Create onetable
+```{r}
+
+```
 
