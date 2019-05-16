@@ -63,8 +63,6 @@ train %>%
     theme_bw()
 ```
 
-
-
 ```{r}
 train %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
@@ -308,5 +306,7 @@ resamp <- resamples(list(glm.fit = model.glm,
 bwplot(resamp)
 summary(resamp)
 ```
+
+
 
 

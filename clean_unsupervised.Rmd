@@ -1,7 +1,7 @@
 ---
-title: "dsII_Holly"
+title: "clean_unsuper"
 author: "Yun He"
-date: "5/14/2019"
+date: "5/15/2019"
 output: pdf_document
 ---
 
@@ -11,59 +11,70 @@ library(tidyverse)
 library(caret)
 library(factoextra)
 library(gridExtra)
-library(e1071)
-library(pROC)
+library(corrplot)
+library(RColorBrewer)
+library(gplots)
+library(tableone)
+library(flextable)
+library(magrittr)
+library(officer)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ## data cleaning
 ```{r}
 heart_disease = read_csv("./data/heart.csv") %>% 
-    mutate(target=ifelse(target==1, "absence", "presence"))
+    mutate(target = ifelse(target == 1, "absence", "presence")) %>% 
+    mutate(sex = as.factor(sex),
+           cp = as.factor(cp),
+           fbs = as.factor(fbs),
+           restecg = as.factor(restecg),
+           exang = as.factor(exang),
+           slope = as.factor(slope),
+           thal = as.factor(thal)
+           )
+
 set.seed(1)
 trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
 train = heart_disease[trRows,]
 test = heart_disease[-trRows,]
 
-train = train %>% 
-    mutate(sex=as.factor(sex),
-           cp=as.factor(cp),
-           fbs=as.factor(fbs),
-           restecg=as.factor(restecg),
-           exang=as.factor(exang),
-           slope=as.factor(slope),
-           thal=as.factor(thal))
 train.x <- model.matrix(target~.,train)[,-1]
 train.y <- train$target
 
-test = test %>% 
-    mutate(sex=as.factor(sex),
-           cp=as.factor(cp),
-           fbs=as.factor(fbs),
-           restecg=as.factor(restecg),
-           exang=as.factor(exang),
-           slope=as.factor(slope),
-           thal=as.factor(thal))
+
 test.x <- model.matrix(target~.,test)[,-1]
 test.y <- test$target
 ```
 
 ## EDA
 
+### check missing value
+```{r}
+sapply(X = train, FUN = function(x) sum(is.na(x)))
+```
+
 ### continuous
 ```{r}
-train %>%
+heart_disease %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
     gather(-target, key = "var", value = "value") %>% 
     ggplot(aes(x = target, y = value, fill = target)) +
-    geom_boxplot(alpha = 0.5) +
+    geom_boxplot(alpha = 0.6) +
     facet_wrap(~ var, scales = "free") +
     theme_bw()
 
-train %>%
+heart_disease %>%
     select(age, trestbps, chol, thalach, oldpeak, target) %>% 
     gather(-target, key = "var", value = "value") %>% 
     ggplot(aes(x = value, fill = target)) +
-    geom_density(alpha = 0.5) +
+    geom_density(alpha = 0.6) +
     facet_wrap(~ var, scales = "free") +
     theme_bw()
 ```
@@ -71,23 +82,23 @@ train %>%
 ### corr matrix
 ```{r}
 library(ggcorrplot)
-train_continu = train %>%
+heart_continu = heart_disease %>%
     select(age, trestbps, chol, thalach, oldpeak)
-corr =  round(cor(train_continu), 4)
+corr =  round(cor(heart_continu), 4)
 
 ggcorrplot(corr, hc.order = TRUE, type = "lower",
    outline.col = "white",
    ggtheme = ggplot2::theme_bw,
    lab = T,
-   colors = c("#6D9EC1", "white", "#E46726"))  
+   colors =  c("#4682B4", "white", "#FF8C00"))  
 ```
 
 ### categorical
 ```{r}
 barplot = function(var){
-    ggplot(train, aes_string(x = var,  group = "target")) + 
+    ggplot(heart_disease, aes_string(x = var,  group = "target")) + 
     geom_bar(aes(y = ..prop.., fill = factor(..x..)),
-             stat = "count", alpha = 0.5) +
+             stat = "count", alpha = 0.8) +
     geom_text(aes( label = scales::percent(..prop..),
                    y = ..prop.. ), 
               stat = "count", vjust = 0, size = 2) +
@@ -111,10 +122,34 @@ gridExtra::grid.arrange(a1, a2, a3, a4,
                         ncol = 3, nrow = 3)
 ```
 
-### check missing value
+## tableone
+
 ```{r}
-sapply(X = train, FUN = function(x) sum(is.na(x)))
+tableOne = CreateTableOne(vars = c("age", "trestbps", "chol", "thalach",
+                                   "oldpeak", "sex", "exang", "fbs", 
+                                   "slope", "thal", "restecg", "cp","ca"
+                                   ), 
+                          strata = c("target"), 
+                          data = heart_disease,
+                          factorVars = c("sex", "fbs", "exang", "slope",
+                                         "thal", "restecg", "cp", "ca"))
+
+table = print(tableOne, cramVars = c("sex", "exang", "fbs"))
+table = as.data.frame(table)
+
+table = table %>% 
+    mutate(name = rownames(table)) %>% 
+    select(name, everything())
+
+
+
+mydoc <- read_docx() 
+mydoc = mydoc %>% 
+    body_add_flextable(flextable(table))
+
+print(mydoc, target = "./table.docx")
 ```
+
 
 ## Unsupervised learning
 
@@ -146,9 +181,10 @@ train_kmeans %>% ggplot(aes(x = target, fill = target)) +
     facet_grid(.~kmean) +
     theme_bw()
 
-km$centers  # %>% knitr::kable()
 
 center = t(apply(km$centers, 1, function(r)r*attr(train.x_scale,'scaled:scale') + attr(train.x_scale, 'scaled:center')))
+
+center
 ```
 
 ## PCA
@@ -162,65 +198,40 @@ fviz_pca_ind(pca,
              addEllipses = TRUE)
 ```
 
-## SVM
+
+## Hierarchical clustering
 ```{r}
-train = train %>% mutate(target=as.factor(target))
-test = test %>% mutate(target=as.factor(target))
-## linear boundary
-ctrl <- trainControl(method = "cv")
-
-set.seed(1)
-svml.fit <- train(target~., 
-                  data = train, 
-                  method = "svmLinear2",
-                  preProcess = c("center", "scale"),
-                  tuneGrid = data.frame(cost = exp(seq(-5,0,len=50))),
-                  trControl = ctrl)
-
-ggplot(svml.fit, highlight = TRUE)
-svml.fit$bestTune
-
-## radial kernel
-svmr.grid <- expand.grid(C = exp(seq(-4,6,len=50)),
-                         sigma = exp(seq(-10,-3,len=6)))
-set.seed(1)             
-svmr.fit <- train(target~., 
-                  data = train,
-                  method = "svmRadial",
-                  preProcess = c("center", "scale"),
-                  tuneGrid = svmr.grid,
-                  trControl = ctrl)
-
-ggplot(svmr.fit, highlight = TRUE)
-svmr.fit$bestTune
-
-resamp <- resamples(list(svmr = svmr.fit, 
-                         svml = svml.fit))
-bwplot(resamp)
-summary(resamp)
+train_1 = train %>% 
+    mutate(target = ifelse(target == "absence",1,0))
+train.hc = train.x %>% as.data.frame() %>% 
+    mutate(target = as.character(train_1$target),
+           num =as.character(1:228)) %>% 
+    mutate(name = paste(target,".", num)) %>% 
+    select(-num, -target) %>% 
+    column_to_rownames(var = "name") %>% scale()
+    
 ```
 
-## Neural network
 ```{r}
-nnetGrid <- expand.grid(size = seq(from = 1, to = 10, by = 1), 
-                        decay = exp(seq(from = -3, to = 3, length = 30)))
 
-ctrl2 <- trainControl(method = "cv", 
-                      summaryFunction = twoClassSummary,
-                      classProbs = TRUE)
+hc.heart = hclust(dist(train.hc), method = "complete")
 
-set.seed(1)
-cnnet.fit <- train(target~.,
-                   train,
-                   method = "nnet",
-                   tuneGrid = nnetGrid,
-                   preProcess = c("center","scale"),
-                   trControl = ctrl2,
-                   metric = "ROC",
-                   trace = FALSE)
 
-ggplot(cnnet.fit, highlight = TRUE) + scale_shape_manual(values = rep(19,10), 
-                                                         guide = FALSE)
+fviz_dend(hc.heart, k = 4,
+          cex = 0.4,
+          palette = "jco",
+          color_labels_by_k = TRUE,
+          rect = TRUE, rect_fill = TRUE, rect_border = "jco",
+          labels_track_height = 0.8)
 ```
 
+```{r}
+col1 <- colorRampPalette(brewer.pal(9, "GnBu"))(100)
 
+heatmap.2(t(train.hc),
+        col = col1, keysize = 1, key.par = list(cex = .3),
+        cexRow = 1, 
+        #dendrogram = "col",
+        trace = "none", key = TRUE, cexCol = 0.4,
+        margins = c(5, 5))
+```
