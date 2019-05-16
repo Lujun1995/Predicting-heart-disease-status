@@ -97,7 +97,7 @@ model.lda = train(x = model.x,
 
 
 ## Naive bayes
-```{r, message=FALSE}
+```{r, warning=FALSE}
 set.seed(1)
 nbGrid = expand.grid(usekernel = c(FALSE,TRUE),
                      fL = 1, adjust = seq(0, 4, length = 20))
@@ -157,7 +157,7 @@ col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 ```{r, message=FALSE}
 rf.grid <- expand.grid(mtry = 1:7,
                        splitrule = "gini",
-                       min.node.size = seq(1,191, by = 2))
+                       min.node.size = seq(1,141, by = 2))
 
 set.seed(1)
 rf.class <- train(model.x, model.y,
@@ -168,9 +168,8 @@ rf.class <- train(model.x, model.y,
                   importance = "impurity")
 
 ggplot(rf.class, highlight = TRUE) +
-viridis::scale_color_viridis(
-discrete = TRUE
-) + scale_shape_manual(values = seq(1,7))
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,7))
 
 barplot(sort(ranger::importance(rf.class$finalModel), decreasing = FALSE),
 las = 2, horiz = TRUE, cex.names = 0.7,
@@ -181,10 +180,10 @@ col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 ##Boosting
 
 ```{r fig.height=12, fig.width=12}
-boost.grid <- expand.grid(n.trees = seq(20, 1500, by = 20),
+boost.grid <- expand.grid(n.trees = seq(20, 1700, by = 25),
                           interaction.depth = 1:6,
-                          shrinkage = c(0.019, 0.022, 0.025, 0.028, 
-                                        0.031, 0.034, 0.037, 0.040),
+                          shrinkage = c(0.022, 0.025, 0.028, 0.031, 0.034, 
+                                        0.037, 0.040, 0.043, 0.047,0.050),
                           n.minobsinnode = 1)
 
 set.seed(1)
@@ -198,12 +197,30 @@ boost.class = train(model.x, model.y,
                     verbose = FALSE)
 
 ggplot(boost.class, highlight = TRUE) +
-viridis::scale_color_viridis(
-discrete = TRUE
-) + scale_shape_manual(values = seq(0,10))
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(0,10))
 
 summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
 ```
+
+###centered ICE
+
+```{r}
+ice_ca.rf = rf.class %>%
+    partial(pred.var = "ca",
+            grid.resolution = 100,
+            ice = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1,center = TRUE) +
+    ggtitle("Random forest, ca")
+
+ice_oldpeak.rf = gbm.fit %>%
+    partial(pred.var = "oldpeak",
+            grid.resolution = 100,
+            ice = TRUE) %>%
+    autoplot(train = Hitters, alpha = .1) +
+    ggtitle("Random forest, oldpeak")
+```
+
 
 ## SVM
 ```{r, message=FALSE}
@@ -231,7 +248,9 @@ svmr.fit <- train(target~.,
                   tuneGrid = svmr.grid,
                   trControl = ctrl)
 
-ggplot(svmr.fit, highlight = TRUE)
+ggplot(svmr.fit, highlight = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,6))
 svmr.fit$bestTune
 
 resamp <- resamples(list(svmr = svmr.fit, 
@@ -245,10 +264,6 @@ summary(resamp)
 nnetGrid <- expand.grid(size = seq(from = 1, to = 10, by = 1), 
                         decay = exp(seq(from = -3, to = 3, length = 30)))
 
-ctrl2 <- trainControl(method = "cv", 
-                      summaryFunction = twoClassSummary,
-                      classProbs = TRUE)
-
 set.seed(1)
 cnnet.fit <- train(target~.,
                    heart_disease,
@@ -259,8 +274,9 @@ cnnet.fit <- train(target~.,
                    metric = "ROC",
                    trace = FALSE)
 
-ggplot(cnnet.fit, highlight = TRUE) + scale_shape_manual(values = rep(19,10), 
-                                                         guide = FALSE)
+ggplot(cnnet.fit, highlight = TRUE) + 
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,10))
 ```
 
 ```{r}
