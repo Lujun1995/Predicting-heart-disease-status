@@ -30,15 +30,17 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ## data cleaning
 ```{r}
 heart_disease = read_csv("./data/heart.csv") %>% 
-    mutate(target = ifelse(target == 1, "absence", "presence")) %>% 
+    mutate(target = ifelse(target == 1, "absence", "presence")) %>%
     mutate(sex = as.factor(sex),
            cp = as.factor(cp),
            fbs = as.factor(fbs),
            restecg = as.factor(restecg),
            exang = as.factor(exang),
            slope = as.factor(slope),
-           thal = as.factor(thal)
-           )
+           thal = as.factor(thal),
+           target = as.factor(target)
+           ) %>% 
+    filter(thal != 0)
 
 
 model.x <- model.matrix(target~.,heart_disease)[,-1]
@@ -199,7 +201,7 @@ hd_1 = heart_disease %>%
     mutate(target = ifelse(target == "absence",1,0))
 train.hc = model.x_scale %>% as.data.frame() %>% 
     mutate(target = as.character(hd_1$target),
-           num = as.character(1:303)) %>% 
+           num = as.character(1:301)) %>% 
     mutate(name = paste(target,".", num)) %>% 
     select(-num, -target) %>% 
     column_to_rownames(var = "name") %>% scale()
