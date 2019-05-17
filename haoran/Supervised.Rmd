@@ -209,8 +209,8 @@ a = predict(rf.class, type="raw")
 
 ```{r fig.height=12, fig.width=12}
 boost.grid <- expand.grid(n.trees = seq(20, 1700, by = 25),
-                          interaction.depth = 2:7,
-                          shrinkage =  seq(0.01, 0.06, by = 0.005),
+                          interaction.depth = 1:6,
+                          shrinkage =  seq(0.005, 0.06, by = 0.005),
                           n.minobsinnode = 1)
 
 set.seed(1)
@@ -225,7 +225,7 @@ boost.class = train(model.x, model.y,
 
 ggplot(boost.class, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
-    scale_shape_manual(values = seq(0,10))
+    scale_shape_manual(values = seq(0,11))
 
 summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
 ```
