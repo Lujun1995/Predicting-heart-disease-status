@@ -19,6 +19,7 @@ library(MLmetrics)
 library(rpart.plot)
 library(randomForest)
 library(pdp)
+library(glmnet)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -54,7 +55,8 @@ heart_disease = heart_disease %>%
            restecg=as.factor(restecg),
            exang=as.factor(exang),
            slope=as.factor(slope),
-           thal=as.factor(thal))
+           thal=factor(thal))
+
 model.x <- model.matrix(target~.,heart_disease)[,-1]
 model.y <- heart_disease$target
 
@@ -96,6 +98,17 @@ ggplot(model.glm, highlight = T)  +
 
 model.glm$bestTune
 ```
+
+```{r}
+glmnet = glmnet(x = model.x, y = model.y, 
+       family = "binomial", 
+       alpha = 0, 
+       lambda = 0.1946867)
+broom::tidy(glmnet)
+```
+
+
+
 
 ## LDA
 ```{r, message=FALSE}
