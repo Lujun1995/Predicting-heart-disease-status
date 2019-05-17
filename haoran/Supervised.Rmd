@@ -31,7 +31,7 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ```{r}
-heart_disease = read_csv(".\\data\\heart.csv") %>% 
+heart_disease = read_csv("./data/heart.csv") %>% 
     mutate(target = ifelse(target==1, 0, 1)) %>% 
     mutate(target=as.factor(target)) %>%
     mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
@@ -87,10 +87,7 @@ model.glm <- train(x = model.x,
                    tuneGrid = glmnGrid,
                    metric = "ROC",
                    trControl = ctrl)
-```
 
-
-```{r}
 ggplot(model.glm, highlight = T)  +
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,10))
@@ -105,8 +102,6 @@ glmnet = glmnet(x = model.x, y = model.y,
        lambda = 0.1946867)
 broom::tidy(glmnet)
 ```
-
-
 
 
 ## LDA
@@ -275,12 +270,8 @@ grid.arrange(ice_thalach.rf,  ice_ca.rf,
              ice_oldpeak.rf,  ice_age.rf, nrow = 2)
 ```
 
-
-## SVM
-```{r, message=FALSE}
-
-ctrl2 <- trainControl(method = "cv")
-
+## SVM ROC
+```{r}
 ## linear boundary
 set.seed(1)
 svml.fit <- train(target~., 
@@ -288,7 +279,8 @@ svml.fit <- train(target~.,
                   method = "svmLinear2",
                   preProcess = c("center", "scale"),
                   tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
-                  trControl = ctrl2)
+                  trControl = ctrl,
+                  metric = "ROC")
 
 ggplot(svml.fit, highlight = TRUE)
 svml.fit$bestTune
@@ -302,18 +294,15 @@ svmr.fit <- train(target~.,
                   method = "svmRadial",
                   preProcess = c("center", "scale"),
                   tuneGrid = svmr.grid,
-                  trControl = ctrl2)
+                  trControl = ctrl,
+                  metric = "ROC")
 
 ggplot(svmr.fit, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,10))
 svmr.fit$bestTune
-
-#resamp <- resamples(list(svmr = svmr.fit, 
-#                         svml = svml.fit))
-#bwplot(resamp)
-#summary(resamp)
 ```
+
 
 ## Neural network
 ```{r, message=FALSE, eval = FALSE}
@@ -355,19 +344,33 @@ resamp = resamples(list(
                         rf = rf.class, 
                         bagging = bagging.class, 
                         tree = tree.class,
-                        cnnet.fit = cnnet.fit
+                        cnnet.fit = cnnet.fit,
+                        svml.fit = svml.fit,
+                        svmr.fit = svmr.fit
                         ))
 summary(resamp)
 bwplot(resamp, metric = "ROC")
 ```
 
+
+
+
+
+
+
+
+
+
+
 #Comparing accuracy
 
 ##Regularized logistic
 ```{r}
+ctrl2 <- trainControl(method = "cv")
+
 glmnGrid <- expand.grid(.alpha = 0,
                         .lambda = 0.2335065)
-ctrl2 <- trainControl(method = "cv")
+
 set.seed(1)
 model.glm.2 <- train(x = model.x,
                    y = model.y,
@@ -475,6 +478,37 @@ cnnet.fit.2 <- train(target~.,
                    trace = FALSE)
 ```
 
+## SVM
+```{r, message=FALSE}
+## linear boundary
+set.seed(1)
+svml.fit.2 <- train(target~., 
+                  data = heart_disease, 
+                  method = "svmLinear2",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
+                  trControl = ctrl2)
+
+ggplot(svml.fit, highlight = TRUE)
+svml.fit$bestTune
+
+## radial kernel
+svmr.grid <- expand.grid(C = exp(seq(-4,5,len=50)),
+                         sigma = exp(seq(-5,-2,len=10)))
+set.seed(1)             
+svmr.fit.2 <- train(target~., 
+                  data = heart_disease,
+                  method = "svmRadial",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = svmr.grid,
+                  trControl = ctrl2)
+
+ggplot(svmr.fit, highlight = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,10))
+svmr.fit$bestTune
+```
+
 ```{r}
 resamp = resamples(list(
                         glm.fit = model.glm.2,
@@ -484,7 +518,9 @@ resamp = resamples(list(
                         rf = rf.class.2, 
                         bagging = bagging.class.2, 
                         tree = tree.class.2,
-                        cnnet.fit = cnnet.fit.2
+                        cnnet.fit = cnnet.fit.2,
+                        svml.fit = svml.fit.2,
+                        svmr.fit = svmr.fit.2
                         ))
 summary(resamp)
 bwplot(resamp)
