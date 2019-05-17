@@ -31,7 +31,7 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ```{r}
-heart_disease = read_csv("./data/heart.csv") %>% 
+heart_disease = read_csv("./heart.csv") %>% 
     mutate(target = ifelse(target==1, 0, 1)) %>% 
     mutate(target=as.factor(target)) %>%
     mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
@@ -305,7 +305,7 @@ svmr.fit$bestTune
 
 
 ## Neural network
-```{r, message=FALSE, eval = FALSE}
+```{r, message=FALSE}
 nnetGrid <- expand.grid(size = seq(from = 16, to = 30, by = 2), 
                         decay = seq(from = 5, to = 8, length = 30))
 
