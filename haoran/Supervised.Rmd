@@ -31,7 +31,7 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ```{r}
-heart_disease = read_csv("..\\data\\heart.csv") %>% 
+heart_disease = read_csv("./data/heart.csv") %>% 
     mutate(target = ifelse(target==1, 0, 1)) %>% 
     mutate(target=as.factor(target)) %>%
     mutate(target=as.factor(ifelse(target==0, "absence", "presence")))
@@ -266,7 +266,7 @@ svml.fit <- train(target~.,
                   data = heart_disease, 
                   method = "svmLinear2",
                   preProcess = c("center", "scale"),
-                  tuneGrid = data.frame(cost = exp(seq(-5,0,len=50))),
+                  tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
                   trControl = ctrl2)
 
 ggplot(svml.fit, highlight = TRUE)
@@ -295,9 +295,9 @@ svmr.fit$bestTune
 ```
 
 ## Neural network
-```{r, message=FALSE}
-nnetGrid <- expand.grid(size = seq(from = 22, to = 40, by = 2), 
-                        decay = seq(from = 2.5, to = 6.5, length = 41))
+```{r, message=FALSE, eval = FALSE}
+nnetGrid <- expand.grid(size = seq(from = 16, to = 30, by = 2), 
+                        decay = seq(from = 5, to = 8, length = 30))
 
 set.seed(1)
 cnnet.fit <- train(target~.,
@@ -312,9 +312,13 @@ cnnet.fit <- train(target~.,
 ggplot(cnnet.fit, highlight = TRUE) + 
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,13))
+
+save(cnnet.fit, file = "./cnnet.rda")
+summary(cnnet.fit)
 ```
 
 ```{r}
+load(file = "./cnnet.rda") 
 resamp = resamples(list(
                         glm.fit = model.glm,
                         lda.fit = model.lda,
