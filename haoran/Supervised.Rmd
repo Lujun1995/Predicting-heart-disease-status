@@ -194,6 +194,8 @@ rf.class <- train(model.x, model.y,
                   importance = "impurity")
 save(rf.class, file = "./rf.rda")
 
+rf.class$bestTune
+
 ggplot(rf.class, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,7))
@@ -201,8 +203,6 @@ ggplot(rf.class, highlight = TRUE) +
 barplot(sort(ranger::importance(rf.class$finalModel), decreasing = FALSE),
 las = 2, horiz = TRUE, cex.names = 0.7,
 col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
-
-
 
 ```
 
@@ -225,6 +225,7 @@ boost.class = train(model.x, model.y,
                     verbose = FALSE)
 save(boost.class, file = "./boost.rda")
 
+boost.class$bestTune
 
 ggplot(boost.class, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
@@ -368,7 +369,7 @@ glmnGrid <- expand.grid(.alpha = 0,
                         .lambda = 0.2335065)
 ctrl2 <- trainControl(method = "cv")
 set.seed(1)
-model.glm <- train(x = model.x,
+model.glm.2 <- train(x = model.x,
                    y = model.y,
                    tuneGrid = glmnGrid,
                    method = "glmnet",
@@ -380,7 +381,7 @@ model.glm <- train(x = model.x,
 ##LDA
 ```{r}
 set.seed(1)
-model.lda = train(x = model.x,
+model.lda.2 = train(x = model.x,
                   y = model.y,
                   method = "lda",
                   metric = "Accuracy",
@@ -392,7 +393,7 @@ model.lda = train(x = model.x,
 set.seed(1)
 nbGrid = expand.grid(usekernel = TRUE,
                      fL = 1, adjust = 1.473684)
-model.bayes = train(x = model.x,
+model.bayes.2 = train(x = model.x,
                     y = model.y,
                     method = "nb",
                     tuneGrid = nbGrid,
@@ -403,10 +404,89 @@ model.bayes = train(x = model.x,
 ##Tree
 ```{r}
 set.seed(1)
-tree.class <- train(model.x, model.y,
+tree.class.2 <- train(model.x, model.y,
                     method = "rpart",
-                    tuneGrid = data.frame(cp = exp(seq(-10,-3, len = 20))),
-                    trControl = ctrl,
-                    metric = "ROC")
+                    tuneGrid = data.frame(cp = 0.003776539),
+                    trControl = ctrl2,
+                    metric = "Accuracy")
+```
+
+##Bagging
+```{r}
+bagging.grid <- expand.grid(mtry = 18,
+                            splitrule = "gini",
+                            min.node.size = 40)
+
+set.seed(1)
+bagging.class.2 <- train(model.x, model.y,
+                method = "ranger",
+                tuneGrid = bagging.grid,
+                metric = "Accuracy",
+                trControl = ctrl2,
+                importance = "impurity")
+```
+
+##Random Forest
+```{r}
+rf.grid <- expand.grid(mtry = 1,
+                       splitrule = "gini",
+                       min.node.size = 25)
+
+set.seed(1)
+rf.class.2 <- train(model.x, model.y,
+                  method = "ranger",
+                  tuneGrid = rf.grid,
+                  metric = "Accuracy",
+                  trControl = ctrl2,
+                  importance = "impurity")
+```
+
+##Boosting
+```{r}
+boost.grid <- expand.grid(n.trees = 1370,
+                          interaction.depth = 1,
+                          shrinkage = 0.015,
+                          n.minobsinnode = 1)
+
+set.seed(1)
+# Adaboost loss function
+boost.class.2 = train(model.x, model.y,
+                    tuneGrid = boost.grid,
+                    trControl = ctrl2,
+                    method = "gbm",
+                    distribution = "adaboost",
+                    metric = "Accuracy",
+                    verbose = FALSE)
+```
+
+## Neural network
+```{r}
+nnetGrid <- expand.grid(size = 18, 
+                        decay = 6.448276)
+
+set.seed(1)
+cnnet.fit.2 <- train(target~.,
+                   heart_disease,
+                   method = "nnet",
+                   tuneGrid = nnetGrid,
+                   preProcess = c("center","scale"),
+                   trControl = ctrl2,
+                   metric = "Accuracy",
+                   trace = FALSE)
+```
+
+```{r}
+resamp = resamples(list(
+                        glm.fit = model.glm.2,
+                        lda.fit = model.lda.2,
+                        bayes.fit = model.bayes.2,
+                        boost = boost.class.2, 
+                        rf = rf.class.2, 
+                        bagging = bagging.class.2, 
+                        tree = tree.class.2,
+                        cnnet.fit = cnnet.fit.2
+                        ))
+summary(resamp)
+bwplot(resamp)
 ```
 
