@@ -328,8 +328,8 @@ summary(cnnet.fit)
 load(file = "./cnnet.rda") 
 load(file = "./boost.rda")
 load(file = "./rf.rda")
-load(file = "./bagging")
-load(file = "./bayes")
+load(file = "./bagging.rda")
+load(file = "./bayes.rda")
 
 resamp = resamples(list(
                         glm.fit = model.glm,
