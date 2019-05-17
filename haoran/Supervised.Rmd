@@ -141,7 +141,6 @@ model.bayes$bestTune
 ##Tree
 
 ```{r, message=FALSE}
-
 set.seed(1)
 tree.class <- train(model.x, model.y,
                     method = "rpart",
@@ -159,7 +158,7 @@ rpart.plot(tree.class$finalModel)
 ```{r, message=FALSE}
 bagging.grid <- expand.grid(mtry = 18,
                             splitrule = "gini",
-                            min.node.size = 1:40)
+                            min.node.size = 10:50)
 
 set.seed(1)
 bagging.class <- train(model.x, model.y,
@@ -195,8 +194,6 @@ rf.class <- train(model.x, model.y,
                   importance = "impurity")
 save(rf.class, file = "./rf.rda")
 
-
-
 ggplot(rf.class, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,7))
@@ -226,7 +223,7 @@ boost.class = train(model.x, model.y,
                     distribution = "adaboost",
                     metric = "ROC",
                     verbose = FALSE)
-save(boost.class, file = ".\\boost.rda")
+save(boost.class, file = "./boost.rda")
 
 
 ggplot(boost.class, highlight = TRUE) +
@@ -244,8 +241,7 @@ ice_thalach.rf = rf.class %>%
             grid.resolution = 100,
             ice = TRUE, 
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1, 
-             center = TRUE, ylab = "???") +
+    autoplot(train = heart_disease, alpha = .1) +
     ggtitle("Random forest, thalach")
 
 ice_ca.rf = rf.class %>%
@@ -253,8 +249,8 @@ ice_ca.rf = rf.class %>%
             grid.resolution = 100,
             ice = TRUE, 
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1, center = TRUE, 
-             ylab = "???", xlab = "number of major vessels") +
+    autoplot(train = heart_disease, alpha = .1, 
+             xlab = "number of major vessels") +
     ggtitle("Random forest, number of major vessels")
 
 ice_oldpeak.rf =  rf.class %>%
@@ -262,8 +258,8 @@ ice_oldpeak.rf =  rf.class %>%
             grid.resolution = 100,
             ice = TRUE,
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1, center = TRUE,
-             ylab = "???", xlab = "ST depression") +
+    autoplot(train = heart_disease, alpha = .1, 
+             xlab = "ST depression") +
     ggtitle("Random forest, ST depression")
 
 ice_age.rf = rf.class %>%
@@ -271,8 +267,7 @@ ice_age.rf = rf.class %>%
             grid.resolution = 100,
             ice = TRUE, 
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1, 
-             center = TRUE, ylab = "???") +
+    autoplot(train = heart_disease, alpha = .1) +
     ggtitle("Random forest, age")
 
 grid.arrange(ice_thalach.rf,  ice_ca.rf, 
@@ -340,6 +335,8 @@ ggplot(cnnet.fit, highlight = TRUE) +
 
 save(cnnet.fit, file = "./cnnet.rda")
 summary(cnnet.fit)
+
+cnnet.fit$bestTune
 ```
 
 ```{r}
@@ -366,4 +363,50 @@ bwplot(resamp, metric = "ROC")
 #Comparing accuracy
 
 ##Regularized logistic
+```{r}
+glmnGrid <- expand.grid(.alpha = 0,
+                        .lambda = 0.2335065)
+ctrl2 <- trainControl(method = "cv")
+set.seed(1)
+model.glm <- train(x = model.x,
+                   y = model.y,
+                   tuneGrid = glmnGrid,
+                   method = "glmnet",
+                   metric = "Accuracy",
+                   trControl = ctrl2)
+
+```
+
+##LDA
+```{r}
+set.seed(1)
+model.lda = train(x = model.x,
+                  y = model.y,
+                  method = "lda",
+                  metric = "Accuracy",
+                  trControl = ctrl2)
+```
+
+##Naive bayes
+```{r}
+set.seed(1)
+nbGrid = expand.grid(usekernel = TRUE,
+                     fL = 1, adjust = 1.473684)
+model.bayes = train(x = model.x,
+                    y = model.y,
+                    method = "nb",
+                    tuneGrid = nbGrid,
+                    metric = "Accuracy",
+                    trControl = ctrl2) 
+```
+
+##Tree
+```{r}
+set.seed(1)
+tree.class <- train(model.x, model.y,
+                    method = "rpart",
+                    tuneGrid = data.frame(cp = exp(seq(-10,-3, len = 20))),
+                    trControl = ctrl,
+                    metric = "ROC")
+```
 
