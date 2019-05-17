@@ -31,14 +31,13 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ```{r}
-heart_disease = read_csv("..\\data\\heart.csv") %>% 
+heart_disease = read_csv(".\\data\\heart.csv") %>% 
     mutate(target = ifelse(target==1, 0, 1)) %>% 
     mutate(target=as.factor(target)) %>%
-    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))
-
-# %>%  mutate(target = relevel(target, "absence")) 
+    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
+    mutate(target = relevel(target, "presence")) 
 #  %>%   arrange(-as.numeric(target))
-set.seed(1)
+#set.seed(1)
 #trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
 #train = heart_disease[trRows,]
 #test = heart_disease[-trRows,]
@@ -132,6 +131,7 @@ model.bayes = train(x = model.x,
                     tuneGrid = nbGrid,
                     metric = "ROC",
                     trControl = ctrl) 
+save(model.bayes, file = "./bayes.rda")
 
 ggplot(model.bayes, highlight = T)
 
@@ -168,6 +168,8 @@ bagging.class <- train(model.x, model.y,
                 metric = "ROC",
                 trControl = ctrl,
                 importance = "impurity")
+save(bagging.class, file = "./bagging.rda")
+
 ggplot(bagging.class, highlight = TRUE)
 bagging.class$bestTune
 
@@ -180,9 +182,9 @@ col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 ##Random Forest
 
 ```{r, message=FALSE}
-rf.grid <- expand.grid(mtry = 1:7,
+rf.grid <- expand.grid(mtry = 1:6,
                        splitrule = "gini",
-                       min.node.size = seq(1,141, by = 2))
+                       min.node.size = seq(1,191, by = 2))
 
 set.seed(1)
 rf.class <- train(model.x, model.y,
@@ -191,6 +193,8 @@ rf.class <- train(model.x, model.y,
                   metric = "ROC",
                   trControl = ctrl,
                   importance = "impurity")
+save(rf.class, file = "./rf.rda")
+
 
 
 ggplot(rf.class, highlight = TRUE) +
@@ -201,7 +205,7 @@ barplot(sort(ranger::importance(rf.class$finalModel), decreasing = FALSE),
 las = 2, horiz = TRUE, cex.names = 0.7,
 col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 
-a = predict(rf.class, type="raw")
+
 
 ```
 
@@ -209,8 +213,8 @@ a = predict(rf.class, type="raw")
 
 ```{r fig.height=12, fig.width=12}
 boost.grid <- expand.grid(n.trees = seq(20, 1700, by = 25),
-                          interaction.depth = 2:7,
-                          shrinkage =  seq(0.01, 0.06, by = 0.005),
+                          interaction.depth = 1:6,
+                          shrinkage =  seq(0.005, 0.06, by = 0.005),
                           n.minobsinnode = 1)
 
 set.seed(1)
@@ -222,10 +226,12 @@ boost.class = train(model.x, model.y,
                     distribution = "adaboost",
                     metric = "ROC",
                     verbose = FALSE)
+save(boost.class, file = ".\\boost.rda")
+
 
 ggplot(boost.class, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
-    scale_shape_manual(values = seq(0,10))
+    scale_shape_manual(values = seq(0,11))
 
 summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
 ```
@@ -233,30 +239,51 @@ summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
 ###centered ICE
 
 ```{r}
-
-
-ice_ca.rf = rf.class %>%
+ice_thalach.rf = rf.class %>%
     pdp::partial(pred.var = "thalach",
             grid.resolution = 100,
             ice = TRUE, 
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1, center = TRUE) +
+    autoplot(train = heart_disease, alpha = .1, 
+             center = TRUE, ylab = "???") +
     ggtitle("Random forest, thalach")
+
+ice_ca.rf = rf.class %>%
+    pdp::partial(pred.var = "ca",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1, center = TRUE, 
+             ylab = "???", xlab = "number of major vessels") +
+    ggtitle("Random forest, number of major vessels")
 
 ice_oldpeak.rf =  rf.class %>%
     partial(pred.var = "oldpeak",
             grid.resolution = 100,
             ice = TRUE,
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1) +
-    ggtitle("Random forest, oldpeak")
+    autoplot(train = heart_disease, alpha = .1, center = TRUE,
+             ylab = "???", xlab = "ST depression") +
+    ggtitle("Random forest, ST depression")
 
-grid.arrange(ice_ca.rf, ice_oldpeak.rf, nrow = 1)
+ice_age.rf = rf.class %>%
+    pdp::partial(pred.var = "age",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1, 
+             center = TRUE, ylab = "???") +
+    ggtitle("Random forest, age")
+
+grid.arrange(ice_thalach.rf,  ice_ca.rf, 
+             ice_oldpeak.rf,  ice_age.rf, nrow = 2)
 ```
 
 
 ## SVM
 ```{r, message=FALSE}
+
+ctrl2 <- trainControl(method = "cv")
 
 ## linear boundary
 set.seed(1)
@@ -264,8 +291,8 @@ svml.fit <- train(target~.,
                   data = heart_disease, 
                   method = "svmLinear2",
                   preProcess = c("center", "scale"),
-                  tuneGrid = data.frame(cost = exp(seq(-5,0,len=50))),
-                  trControl = ctrl)
+                  tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
+                  trControl = ctrl2)
 
 ggplot(svml.fit, highlight = TRUE)
 svml.fit$bestTune
@@ -279,7 +306,7 @@ svmr.fit <- train(target~.,
                   method = "svmRadial",
                   preProcess = c("center", "scale"),
                   tuneGrid = svmr.grid,
-                  trControl = ctrl)
+                  trControl = ctrl2)
 
 ggplot(svmr.fit, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
@@ -293,9 +320,9 @@ svmr.fit$bestTune
 ```
 
 ## Neural network
-```{r, message=FALSE}
-nnetGrid <- expand.grid(size = seq(from = 2, to = 24, by = 2), 
-                        decay = exp(seq(from = -3, to = 1, length = 30)))
+```{r, message=FALSE, eval = FALSE}
+nnetGrid <- expand.grid(size = seq(from = 16, to = 30, by = 2), 
+                        decay = seq(from = 5, to = 8, length = 30))
 
 set.seed(1)
 cnnet.fit <- train(target~.,
@@ -310,9 +337,18 @@ cnnet.fit <- train(target~.,
 ggplot(cnnet.fit, highlight = TRUE) + 
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,13))
+
+save(cnnet.fit, file = "./cnnet.rda")
+summary(cnnet.fit)
 ```
 
 ```{r}
+load(file = "./cnnet.rda") 
+load(file = "./boost.rda")
+load(file = "./rf.rda")
+load(file = "./bagging.rda")
+load(file = "./bayes.rda")
+
 resamp = resamples(list(
                         glm.fit = model.glm,
                         lda.fit = model.lda,
