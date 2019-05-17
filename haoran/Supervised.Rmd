@@ -31,14 +31,13 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ```{r}
-heart_disease = read_csv("./data/heart.csv") %>% 
+heart_disease = read_csv(".\\data\\heart.csv") %>% 
     mutate(target = ifelse(target==1, 0, 1)) %>% 
     mutate(target=as.factor(target)) %>%
-    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))
-
-# %>%  mutate(target = relevel(target, "absence")) 
+    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
+    mutate(target = relevel(target, "presence")) 
 #  %>%   arrange(-as.numeric(target))
-set.seed(1)
+#set.seed(1)
 #trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
 #train = heart_disease[trRows,]
 #test = heart_disease[-trRows,]
@@ -240,25 +239,44 @@ summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
 ###centered ICE
 
 ```{r}
-
-
-ice_ca.rf = rf.class %>%
+ice_thalach.rf = rf.class %>%
     pdp::partial(pred.var = "thalach",
             grid.resolution = 100,
             ice = TRUE, 
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1, center = TRUE) +
+    autoplot(train = heart_disease, alpha = .1, 
+             center = TRUE, ylab = "???") +
     ggtitle("Random forest, thalach")
+
+ice_ca.rf = rf.class %>%
+    pdp::partial(pred.var = "ca",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1, center = TRUE, 
+             ylab = "???", xlab = "number of major vessels") +
+    ggtitle("Random forest, number of major vessels")
 
 ice_oldpeak.rf =  rf.class %>%
     partial(pred.var = "oldpeak",
             grid.resolution = 100,
             ice = TRUE,
             prob = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1) +
-    ggtitle("Random forest, oldpeak")
+    autoplot(train = heart_disease, alpha = .1, center = TRUE,
+             ylab = "???", xlab = "ST depression") +
+    ggtitle("Random forest, ST depression")
 
-grid.arrange(ice_ca.rf, ice_oldpeak.rf, nrow = 1)
+ice_age.rf = rf.class %>%
+    pdp::partial(pred.var = "age",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1, 
+             center = TRUE, ylab = "???") +
+    ggtitle("Random forest, age")
+
+grid.arrange(ice_thalach.rf,  ice_ca.rf, 
+             ice_oldpeak.rf,  ice_age.rf, nrow = 2)
 ```
 
 
