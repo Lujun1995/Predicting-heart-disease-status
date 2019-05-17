@@ -132,6 +132,7 @@ model.bayes = train(x = model.x,
                     tuneGrid = nbGrid,
                     metric = "ROC",
                     trControl = ctrl) 
+save(model.bayes, file = "./bayes.rda")
 
 ggplot(model.bayes, highlight = T)
 
@@ -168,6 +169,8 @@ bagging.class <- train(model.x, model.y,
                 metric = "ROC",
                 trControl = ctrl,
                 importance = "impurity")
+save(bagging.class, file = "./bagging.rda")
+
 ggplot(bagging.class, highlight = TRUE)
 bagging.class$bestTune
 
@@ -191,6 +194,8 @@ rf.class <- train(model.x, model.y,
                   metric = "ROC",
                   trControl = ctrl,
                   importance = "impurity")
+save(rf.class, file = "./rf.rda")
+
 
 
 ggplot(rf.class, highlight = TRUE) +
@@ -201,7 +206,7 @@ barplot(sort(ranger::importance(rf.class$finalModel), decreasing = FALSE),
 las = 2, horiz = TRUE, cex.names = 0.7,
 col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 
-a = predict(rf.class, type="raw")
+
 
 ```
 
@@ -222,6 +227,8 @@ boost.class = train(model.x, model.y,
                     distribution = "adaboost",
                     metric = "ROC",
                     verbose = FALSE)
+save(boost.class, file = ".\\boost.rda")
+
 
 ggplot(boost.class, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
@@ -319,6 +326,11 @@ summary(cnnet.fit)
 
 ```{r}
 load(file = "./cnnet.rda") 
+load(file = "./boost.rda")
+load(file = "./rf.rda")
+load(file = "./bagging")
+load(file = "./bayes")
+
 resamp = resamples(list(
                         glm.fit = model.glm,
                         lda.fit = model.lda,
