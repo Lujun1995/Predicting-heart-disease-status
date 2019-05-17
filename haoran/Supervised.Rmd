@@ -17,6 +17,8 @@ library(tidyverse)
 library(caret)
 library(MLmetrics)
 library(rpart.plot)
+library(randomForest)
+library(pdp)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -29,13 +31,23 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 
 ```{r}
 heart_disease = read_csv("..\\data\\heart.csv") %>% 
-    mutate(target=ifelse(target==1, "absence", "presence"))
+    mutate(target = ifelse(target==1, 0, 1)) %>% 
+    mutate(target=as.factor(target)) %>%
+    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))
+
+# %>%  mutate(target = relevel(target, "absence")) 
+#  %>%   arrange(-as.numeric(target))
 set.seed(1)
 #trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
 #train = heart_disease[trRows,]
 #test = heart_disease[-trRows,]
 
+# heart_disease2 = read_csv("..\\data\\heart.csv") %>% 
+#     mutate(target = ifelse(target==1, 0, 1)) %>% 
+#     mutate(target=as.factor(heart_disease$target)) 
+
 heart_disease = heart_disease %>% 
+    filter(thal != 0) %>% 
     mutate(sex=as.factor(sex),
            cp=as.factor(cp),
            fbs=as.factor(fbs),
@@ -63,11 +75,11 @@ model.y <- heart_disease$target
 ctrl = trainControl(method = "cv",
                     classProbs = TRUE,
                     summaryFunction = twoClassSummary)
-set.seed(1)
+
 
 glmnGrid <- expand.grid(.alpha = seq(0, 0.5, length = 10),
                         .lambda = exp(seq(-10,-1, length = 100)))
-
+set.seed(1)
 model.glm <- train(x = model.x,
                    y = model.y,
                    method = "glmnet",
@@ -167,6 +179,7 @@ rf.class <- train(model.x, model.y,
                   trControl = ctrl,
                   importance = "impurity")
 
+
 ggplot(rf.class, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,7))
@@ -175,15 +188,16 @@ barplot(sort(ranger::importance(rf.class$finalModel), decreasing = FALSE),
 las = 2, horiz = TRUE, cex.names = 0.7,
 col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 
+a = predict(rf.class, type="raw")
+
 ```
 
 ##Boosting
 
 ```{r fig.height=12, fig.width=12}
 boost.grid <- expand.grid(n.trees = seq(20, 1700, by = 25),
-                          interaction.depth = 1:6,
-                          shrinkage = c(0.022, 0.025, 0.028, 0.031, 0.034, 
-                                        0.037, 0.040, 0.043, 0.047,0.050),
+                          interaction.depth = 2:7,
+                          shrinkage =  seq(0.01, 0.06, by = 0.005),
                           n.minobsinnode = 1)
 
 set.seed(1)
@@ -206,19 +220,25 @@ summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
 ###centered ICE
 
 ```{r}
-ice_ca.rf = rf.class %>%
-    partial(pred.var = "ca",
-            grid.resolution = 100,
-            ice = TRUE) %>%
-    autoplot(train = heart_disease, alpha = .1,center = TRUE) +
-    ggtitle("Random forest, ca")
 
-ice_oldpeak.rf = gbm.fit %>%
+
+ice_ca.rf = rf.class %>%
+    pdp::partial(pred.var = "thalach",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1, center = TRUE) +
+    ggtitle("Random forest, thalach")
+
+ice_oldpeak.rf =  rf.class %>%
     partial(pred.var = "oldpeak",
             grid.resolution = 100,
-            ice = TRUE) %>%
-    autoplot(train = Hitters, alpha = .1) +
+            ice = TRUE,
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1) +
     ggtitle("Random forest, oldpeak")
+
+grid.arrange(ice_ca.rf, ice_oldpeak.rf, nrow = 1)
 ```
 
 
@@ -238,8 +258,8 @@ ggplot(svml.fit, highlight = TRUE)
 svml.fit$bestTune
 
 ## radial kernel
-svmr.grid <- expand.grid(C = exp(seq(-4,6,len=50)),
-                         sigma = exp(seq(-10,-3,len=6)))
+svmr.grid <- expand.grid(C = exp(seq(-4,5,len=50)),
+                         sigma = exp(seq(-5,-2,len=10)))
 set.seed(1)             
 svmr.fit <- train(target~., 
                   data = heart_disease,
@@ -250,19 +270,19 @@ svmr.fit <- train(target~.,
 
 ggplot(svmr.fit, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
-    scale_shape_manual(values = seq(1,6))
+    scale_shape_manual(values = seq(1,10))
 svmr.fit$bestTune
 
-resamp <- resamples(list(svmr = svmr.fit, 
-                         svml = svml.fit))
-bwplot(resamp)
-summary(resamp)
+#resamp <- resamples(list(svmr = svmr.fit, 
+#                         svml = svml.fit))
+#bwplot(resamp)
+#summary(resamp)
 ```
 
 ## Neural network
 ```{r, message=FALSE}
-nnetGrid <- expand.grid(size = seq(from = 1, to = 10, by = 1), 
-                        decay = exp(seq(from = -3, to = 3, length = 30)))
+nnetGrid <- expand.grid(size = seq(from = 2, to = 24, by = 2), 
+                        decay = exp(seq(from = -3, to = 1, length = 30)))
 
 set.seed(1)
 cnnet.fit <- train(target~.,
@@ -270,13 +290,13 @@ cnnet.fit <- train(target~.,
                    method = "nnet",
                    tuneGrid = nnetGrid,
                    preProcess = c("center","scale"),
-                   trControl = ctrl2,
+                   trControl = ctrl,
                    metric = "ROC",
                    trace = FALSE)
 
 ggplot(cnnet.fit, highlight = TRUE) + 
     viridis::scale_color_viridis(discrete = TRUE) + 
-    scale_shape_manual(values = seq(1,10))
+    scale_shape_manual(values = seq(1,13))
 ```
 
 ```{r}
@@ -293,4 +313,8 @@ resamp = resamples(list(
 summary(resamp)
 bwplot(resamp, metric = "ROC")
 ```
+
+#Comparing accuracy
+
+##Regularized logistic
 

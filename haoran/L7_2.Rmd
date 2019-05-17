@@ -1,0 +1,359 @@
+---
+title: "Classification Trees and Ensemble Methods"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = T, message = FALSE, results='hide', warning=FALSE}
+library(mlbench)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(party)
+library(partykit)
+library(randomForest)
+library(ranger)
+library(gbm)
+library(plotmo)
+library(pdp)
+library(pROC)
+library(lime)
+```
+
+We use the Pima Indians Diabetes Database (used in L6.Rmd) for illustration. The data contain 768 observations and 9 variables. The outcome is a binary variable `diabetes`. 
+
+```{r}
+data(PimaIndiansDiabetes)
+dat <- PimaIndiansDiabetes
+dat$diabetes <- factor(dat$diabetes, c("pos", "neg"))
+
+set.seed(1)
+rowTrain <- createDataPartition(y = dat$diabetes,
+                                p = 0.75,
+                                list = FALSE)
+```
+
+# Classification trees
+
+## Using `rpart`
+
+```{r}
+set.seed(1)
+tree1 <- rpart(formula = diabetes~., data = dat,
+               subset = rowTrain, 
+               control = rpart.control(cp = 0))
+
+cpTable <- printcp(tree1)
+plotcp(tree1)
+minErr <- which.min(cpTable[,4])
+
+# minimum cross-validation error
+tree2 <- prune(tree1, cp = cpTable[minErr,1])
+rpart.plot(tree2)
+```
+
+## Using `caret`
+
+### CART
+
+```{r, fig.height=2.8, fig.width=3.5, fig.show='hold'}
+ctrl <- trainControl(method = "repeatedcv",
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE)
+
+set.seed(1)
+rpart.fit <- train(diabetes~., dat, 
+                   subset = rowTrain,
+                   method = "rpart",
+                   tuneGrid = data.frame(cp = exp(seq(-6,-3, len = 20))),
+                   trControl = ctrl,
+                   metric = "ROC")
+ggplot(rpart.fit, highlight = TRUE)
+rpart.plot(rpart.fit$finalModel)
+```
+
+### CIT
+
+```{r}
+set.seed(1)
+ctree.fit <- train(diabetes~., dat, 
+                   subset = rowTrain,
+                   method = "ctree",
+                   tuneGrid = data.frame(mincriterion = 1-exp(seq(-2, -1, length = 20))),
+                   metric = "ROC",
+                   trControl = ctrl)
+ggplot(ctree.fit, highlight = TRUE)
+```
+
+```{r, fig.width=15, fig.height=6}
+plot(ctree.fit$finalModel)
+```
+
+```{r}
+rpart.pred <- predict(tree2, newdata = dat[-rowTrain,])[,1]
+
+rpartc.pred <- predict(rpart.fit, newdata = dat[-rowTrain,],
+                       type = "prob")[,1]
+ctree.pred <- predict(ctree.fit, newdata = dat[-rowTrain,],
+                       type = "prob")[,1]
+```
+
+# Random forests and boosting
+
+```{r}
+set.seed(1)
+bagging <- randomForest(diabetes~., dat[rowTrain,],
+                   mtry = 8)
+
+set.seed(1)
+rf <- randomForest(diabetes~., dat[rowTrain,],
+                   mtry = 3)
+
+# fast implementation
+set.seed(1)
+rf2 <- ranger(diabetes~., dat[rowTrain,],
+              mtry = 3, probability = TRUE) 
+
+
+rf.pred <- predict(rf, newdata = dat[-rowTrain,], type = "prob")[,1]
+rf2.pred <- predict(rf2, data = dat[-rowTrain,], type = "response")$predictions[,1]
+```
+
+
+```{r}
+dat2 <- dat
+dat2$diabetes <- as.numeric(dat$diabetes == "pos")
+
+set.seed(1)
+bst <- gbm(diabetes~., dat2[rowTrain,],
+           distribution = "adaboost",
+           n.trees = 1000, 
+           interaction.depth = 2,
+           shrinkage = 0.005,
+           cv.folds = 10)
+
+nt <- gbm.perf(bst, method = "cv")
+nt
+```
+
+## Grid search using `caret`
+
+### Random forests
+
+```{r}
+# Try more if possible
+rf.grid <- expand.grid(mtry = 1:6,
+                       splitrule = "gini",
+                       min.node.size = 1:6)
+set.seed(1)
+rf.fit <- train(diabetes~., dat, 
+                subset = rowTrain,
+                method = "ranger",
+                tuneGrid = rf.grid,
+                metric = "ROC",
+                trControl = ctrl)
+
+ggplot(rf.fit, highlight = TRUE)
+
+rf.pred <- predict(rf.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+```
+
+### Boosting
+
+#### Binomial loss
+
+```{r}
+gbmB.grid <- expand.grid(n.trees = c(2000,3000,4000),
+                        interaction.depth = 1:6,
+                        shrinkage = c(0.001,0.003,0.005),
+                        n.minobsinnode = 1)
+set.seed(1)
+# Binomial loss function
+gbmB.fit <- train(diabetes~., dat, 
+                 subset = rowTrain, 
+                 tuneGrid = gbmB.grid,
+                 trControl = ctrl,
+                 method = "gbm",
+                 distribution = "bernoulli",
+                 metric = "ROC",
+                 verbose = FALSE)
+
+ggplot(gbmB.fit, highlight = TRUE)
+
+gbmB.pred <- predict(gbmB.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+```
+
+#### AdaBoost
+
+```{r}
+gbmA.grid <- expand.grid(n.trees = c(2000,3000,4000),
+                        interaction.depth = 1:6,
+                        shrinkage = c(0.001,0.003,0.005),
+                        n.minobsinnode = 1)
+set.seed(1)
+# Adaboost loss function
+gbmA.fit <- train(diabetes~., dat, 
+                 subset = rowTrain, 
+                 tuneGrid = gbmA.grid,
+                 trControl = ctrl,
+                 method = "gbm",
+                 distribution = "adaboost",
+                 metric = "ROC",
+                 verbose = FALSE)
+
+ggplot(gbmA.fit, highlight = TRUE)
+
+gbmA.pred <- predict(gbmA.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+```
+
+
+```{r}
+resamp <- resamples(list(rf = rf.fit, 
+                         gbmA = gbmA.fit,
+                         gbmB = gbmB.fit,
+                         rpart = rpart.fit,
+                         ctree = ctree.fit))
+summary(resamp)
+```
+
+## Understanding your models
+### Variable importance
+
+```{r}
+set.seed(1)
+rf2.final.per <- ranger(diabetes~., dat[rowTrain,], 
+                        mtry = 3, 
+                        min.node.size = 5,
+                        splitrule = "gini",
+                        importance = "permutation",
+                        scale.permutation.importance = TRUE) 
+
+barplot(sort(ranger::importance(rf2.final.per), decreasing = FALSE), 
+        las = 2, horiz = TRUE, cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan","blue"))(8))
+
+set.seed(1)
+rf2.final.imp <- ranger(diabetes~., dat[rowTrain,], 
+                        mtry = 3, splitrule = "gini",
+                        min.node.size = 5,
+                        importance = "impurity") 
+
+barplot(sort(ranger::importance(rf2.final.imp), decreasing = FALSE), 
+        las = 2, horiz = TRUE, cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan","blue"))(8))
+```
+
+
+
+```{r}
+summary(gbmA.fit$finalModel, las = 2, cBars = 19, cex.names = 0.6)
+```
+
+### PDP 
+
+```{r}
+pdp.rf <- rf.fit %>% 
+  partial(pred.var = "glucose", 
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = dat[rowTrain,]) +
+  ggtitle("Random forest") 
+
+pdp.gbm <- gbmA.fit %>% 
+  partial(pred.var = "glucose", 
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = dat[rowTrain,]) +
+  ggtitle("Boosting") 
+
+grid.arrange(pdp.rf, pdp.gbm, nrow = 1)
+```
+
+### ICE
+
+```{r}
+ice1.rf <- rf.fit %>% 
+  partial(pred.var = "glucose", 
+          grid.resolution = 100,
+          ice = TRUE,
+          prob = TRUE) %>%
+  autoplot(train = dat[rowTrain,], alpha = .1) +
+  ggtitle("Random forest, non-centered") 
+
+ice2.rf <- rf.fit %>% 
+  partial(pred.var = "glucose", 
+          grid.resolution = 100,
+          ice = TRUE,
+          prob = TRUE) %>%
+  autoplot(train = dat[rowTrain,], alpha = .1, 
+           center = TRUE) +
+  ggtitle("Random forest, centered") 
+
+ice1.gbm <- gbmA.fit %>% 
+  partial(pred.var = "glucose", 
+          grid.resolution = 100,
+          ice = TRUE,
+          prob = TRUE) %>%
+  autoplot(train = dat[rowTrain,], alpha = .1) +
+  ggtitle("Boosting, non-centered") 
+
+ice2.gbm <- gbmA.fit %>% 
+  partial(pred.var = "glucose", 
+          grid.resolution = 100,
+          ice = TRUE,
+          prob = TRUE) %>%
+  autoplot(train = dat[rowTrain,], alpha = .1, 
+           center = TRUE) +
+  ggtitle("Boosting, centered") 
+
+grid.arrange(ice1.rf, ice2.rf, ice1.gbm, ice2.gbm,
+             nrow = 2, ncol = 2)
+```
+
+### Explain your prediction
+
+```{r, warning=FALSE}
+new_obs <- dat[-rowTrain,-9][1:2,]
+explainer.gbm <- lime(dat[rowTrain,-9], gbmA.fit)
+explanation.gbm <- explain(new_obs, explainer.gbm, n_features = 8,
+                           labels = "pos")
+plot_features(explanation.gbm)
+```
+
+```{r, warning=FALSE}
+explainer.rf <- lime(dat[rowTrain,-9], rf.fit)
+explanation.rf <- explain(new_obs, explainer.rf, n_features = 8,
+                          labels = "pos")
+plot_features(explanation.rf)
+```
+
+
+# Test data performance
+
+```{r}
+roc.rpart <- roc(dat$diabetes[-rowTrain], rpart.pred)
+roc.rpartc <- roc(dat$diabetes[-rowTrain], rpartc.pred)
+roc.ctree <- roc(dat$diabetes[-rowTrain], ctree.pred)
+roc.rf <- roc(dat$diabetes[-rowTrain], rf.pred)
+roc.gbmA <- roc(dat$diabetes[-rowTrain], gbmA.pred)
+roc.gbmB <- roc(dat$diabetes[-rowTrain], gbmB.pred)
+
+
+plot(roc.rpart)
+plot(roc.rpartc, add = TRUE, col = 2)
+plot(roc.ctree, add = TRUE, col = 3)
+plot(roc.rf, add = TRUE, col = 4)
+plot(roc.gbmA, add = TRUE, col = 5)
+plot(roc.gbmB, add = TRUE, col = 6)
+
+
+auc <- c(roc.rpart$auc[1], roc.rpartc$auc[1], roc.ctree$auc[1],
+         roc.rf$auc[1], roc.gbmA$auc[1], roc.gbmB$auc[1])
+
+modelNames <- c("rpart","rpart_caret","ctree","rf","gbmA","gbmB")
+legend("bottomright", legend = paste0(modelNames, ": ", round(auc,3)),
+       col = 1:6, lwd = 2)
+```
