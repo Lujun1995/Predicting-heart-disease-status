@@ -180,9 +180,9 @@ col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 ##Random Forest
 
 ```{r, message=FALSE}
-rf.grid <- expand.grid(mtry = 1:7,
+rf.grid <- expand.grid(mtry = 1:6,
                        splitrule = "gini",
-                       min.node.size = seq(1,141, by = 2))
+                       min.node.size = seq(1,191, by = 2))
 
 set.seed(1)
 rf.class <- train(model.x, model.y,
@@ -258,6 +258,8 @@ grid.arrange(ice_ca.rf, ice_oldpeak.rf, nrow = 1)
 ## SVM
 ```{r, message=FALSE}
 
+ctrl2 <- trainControl(method = "cv")
+
 ## linear boundary
 set.seed(1)
 svml.fit <- train(target~., 
@@ -265,7 +267,7 @@ svml.fit <- train(target~.,
                   method = "svmLinear2",
                   preProcess = c("center", "scale"),
                   tuneGrid = data.frame(cost = exp(seq(-5,0,len=50))),
-                  trControl = ctrl)
+                  trControl = ctrl2)
 
 ggplot(svml.fit, highlight = TRUE)
 svml.fit$bestTune
@@ -279,7 +281,7 @@ svmr.fit <- train(target~.,
                   method = "svmRadial",
                   preProcess = c("center", "scale"),
                   tuneGrid = svmr.grid,
-                  trControl = ctrl)
+                  trControl = ctrl2)
 
 ggplot(svmr.fit, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
@@ -294,8 +296,8 @@ svmr.fit$bestTune
 
 ## Neural network
 ```{r, message=FALSE}
-nnetGrid <- expand.grid(size = seq(from = 2, to = 24, by = 2), 
-                        decay = exp(seq(from = -3, to = 1, length = 30)))
+nnetGrid <- expand.grid(size = seq(from = 22, to = 40, by = 2), 
+                        decay = seq(from = 2.5, to = 6.5, length = 41))
 
 set.seed(1)
 cnnet.fit <- train(target~.,
