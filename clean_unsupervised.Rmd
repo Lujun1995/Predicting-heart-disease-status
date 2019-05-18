@@ -28,20 +28,22 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ## data cleaning
-```{r}
+```{r message=F}
 heart_disease = read_csv("./data/heart.csv") %>% 
-    mutate(target = ifelse(target == 1, "absence", "presence")) %>%
-    mutate(sex = as.factor(sex),
-           cp = as.factor(cp),
-           fbs = as.factor(fbs),
-           restecg = as.factor(restecg),
-           exang = as.factor(exang),
-           slope = as.factor(slope),
-           thal = as.factor(thal),
-           target = as.factor(target)
-           ) %>% 
-    filter(thal != 0)
+    mutate(target = ifelse(target==1, 0, 1)) %>% 
+    mutate(target=as.factor(target)) %>%
+    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
+    mutate(target = relevel(target, "presence")) 
 
+heart_disease = heart_disease %>% 
+    filter(thal != 0) %>% 
+    mutate(sex=as.factor(sex),
+           cp=as.factor(cp),
+           fbs=as.factor(fbs),
+           restecg=as.factor(restecg),
+           exang=as.factor(exang),
+           slope=as.factor(slope),
+           thal=factor(thal))
 
 model.x <- model.matrix(target~.,heart_disease)[,-1]
 model.y <- heart_disease$target
