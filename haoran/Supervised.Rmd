@@ -30,8 +30,8 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 
 ```
 
-```{r}
-heart_disease = read_csv("./data/heart.csv") %>% 
+```{r message=FALSE}
+heart_disease = read_csv("./heart.csv") %>% 
     mutate(target = ifelse(target==1, 0, 1)) %>% 
     mutate(target=as.factor(target)) %>%
     mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
@@ -96,7 +96,7 @@ model.lda = train(x = model.x,
 
 
 ## Naive bayes
-```{r, warning=FALSE}
+```{r, warning=FALSE, eval=F}
 set.seed(1)
 nbGrid = expand.grid(usekernel = c(FALSE,TRUE),
                      fL = 1, adjust = seq(0, 4, length = 20))
@@ -129,7 +129,7 @@ rpart.plot(tree.class$finalModel)
 
 ##Bagging
 
-```{r, message=FALSE}
+```{r, message=FALSE, eval=F}
 bagging.grid <- expand.grid(mtry = 18,
                             splitrule = "gini",
                             min.node.size = 10:50)
@@ -153,7 +153,7 @@ col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 
 ##Random Forest
 
-```{r, message=FALSE}
+```{r, message=FALSE, eval=F}
 rf.grid <- expand.grid(mtry = 1:6,
                        splitrule = "gini",
                        min.node.size = seq(1,191, by = 2))
@@ -180,7 +180,7 @@ col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
 
 ##Boosting
 
-```{r fig.height=12, fig.width=12}
+```{r fig.height=12, fig.width=12, eval=F}
 boost.grid <- expand.grid(n.trees = seq(20, 1700, by = 25),
                           interaction.depth = 1:6,
                           shrinkage =  seq(0.005, 0.06, by = 0.005),
@@ -203,6 +203,89 @@ ggplot(boost.class, highlight = TRUE) +
     scale_shape_manual(values = seq(0,11))
 
 summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
+```
+
+## SVM ROC
+```{r}
+## linear boundary
+set.seed(1)
+svml.fit <- train(target~., 
+                  data = heart_disease, 
+                  method = "svmLinear2",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
+                  trControl = ctrl,
+                  metric = "ROC")
+
+ggplot(svml.fit, highlight = TRUE)
+svml.fit$bestTune
+
+```
+
+```{r, eval=F}
+## radial kernel
+svmr.grid <- expand.grid(C = exp(seq(-4,5,len=50)),
+                         sigma = exp(seq(-5,-2,len=10)))
+set.seed(1)             
+svmr.fit <- train(target~., 
+                  data = heart_disease,
+                  method = "svmRadial",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = svmr.grid,
+                  trControl = ctrl,
+                  metric = "ROC")
+
+ggplot(svmr.fit, highlight = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,10))
+svmr.fit$bestTune
+```
+
+
+## Neural network
+```{r, message=FALSE, eval=F}
+nnetGrid <- expand.grid(size = seq(from = 16, to = 30, by = 2), 
+                        decay = seq(from = 5, to = 8, length = 30))
+
+set.seed(1)
+cnnet.fit <- train(target~.,
+                   heart_disease,
+                   method = "nnet",
+                   tuneGrid = nnetGrid,
+                   preProcess = c("center","scale"),
+                   trControl = ctrl,
+                   metric = "ROC",
+                   trace = FALSE)
+
+ggplot(cnnet.fit, highlight = TRUE) + 
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,13))
+
+cnnet.fit$bestTune
+```
+
+```{r}
+load(file = "./saved_results/cnnet.rda") 
+load(file = "./saved_results/boost.rda")
+load(file = "./saved_results/rf.rda")
+load(file = "./saved_results/bagging.rda")
+load(file = "./saved_results/bayes.rda")
+load(file = "./saved_results/svmr.rda")
+
+resamp = resamples(list(
+                        Regularized_logistic = model.glm,
+                        LDA = model.lda,
+                        Naive_Bayes = model.bayes,
+                        Adaboost = boost.class, 
+                        Random_forests = rf.class, 
+                        Bagging = bagging.class, 
+                        Tree = tree.class,
+                        Neural_network = cnnet.fit,
+                        SVM_linear = svml.fit,
+                        SVM_gaussian = svmr.fit
+                        ))
+summary(resamp)
+bwplot(resamp, metric = "ROC")
 ```
 
 ###centered ICE
@@ -244,87 +327,6 @@ ice_age.rf = rf.class %>%
 
 grid.arrange(ice_ca.rf, ice_oldpeak.rf,   
              ice_thalach.rf, ice_age.rf, nrow = 2)
-```
-
-## SVM ROC
-```{r}
-## linear boundary
-set.seed(1)
-svml.fit <- train(target~., 
-                  data = heart_disease, 
-                  method = "svmLinear2",
-                  preProcess = c("center", "scale"),
-                  tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
-                  trControl = ctrl,
-                  metric = "ROC")
-
-ggplot(svml.fit, highlight = TRUE)
-svml.fit$bestTune
-
-## radial kernel
-svmr.grid <- expand.grid(C = exp(seq(-4,5,len=50)),
-                         sigma = exp(seq(-5,-2,len=10)))
-set.seed(1)             
-svmr.fit <- train(target~., 
-                  data = heart_disease,
-                  method = "svmRadial",
-                  preProcess = c("center", "scale"),
-                  tuneGrid = svmr.grid,
-                  trControl = ctrl,
-                  metric = "ROC")
-
-ggplot(svmr.fit, highlight = TRUE) +
-    viridis::scale_color_viridis(discrete = TRUE) + 
-    scale_shape_manual(values = seq(1,10))
-svmr.fit$bestTune
-
-```
-
-
-## Neural network
-```{r, message=FALSE}
-nnetGrid <- expand.grid(size = seq(from = 16, to = 30, by = 2), 
-                        decay = seq(from = 5, to = 8, length = 30))
-
-set.seed(1)
-cnnet.fit <- train(target~.,
-                   heart_disease,
-                   method = "nnet",
-                   tuneGrid = nnetGrid,
-                   preProcess = c("center","scale"),
-                   trControl = ctrl,
-                   metric = "ROC",
-                   trace = FALSE)
-
-ggplot(cnnet.fit, highlight = TRUE) + 
-    viridis::scale_color_viridis(discrete = TRUE) + 
-    scale_shape_manual(values = seq(1,13))
-
-cnnet.fit$bestTune
-```
-
-```{r}
-load(file = "./haoran/saved_results/cnnet.rda") 
-load(file = "./haoran/saved_results/boost.rda")
-load(file = "./haoran/saved_results/rf.rda")
-load(file = "./haoran/saved_results/bagging.rda")
-load(file = "./haoran/saved_results/bayes.rda")
-load(file = "./haoran/saved_results/svmr.rda")
-
-resamp = resamples(list(
-                        Regularized_logistic = model.glm,
-                        LDA = model.lda,
-                        Naive_Bayes = model.bayes,
-                        Adaboost = boost.class, 
-                        Random_forests = rf.class, 
-                        Bagging = bagging.class, 
-                        Tree = tree.class,
-                        Neural_network = cnnet.fit,
-                        SVM_linear = svml.fit,
-                        SVM_gaussian = svmr.fit
-                        ))
-summary(resamp)
-bwplot(resamp, metric = "ROC")
 ```
 
 ## Variable importance
@@ -379,7 +381,7 @@ model.lda.2 = train(x = model.x,
 ```
 
 ##Naive bayes
-```{r}
+```{r warning=FALSE}
 set.seed(1)
 nbGrid = expand.grid(usekernel = TRUE,
                      fL = 1, adjust = 1.473684)
