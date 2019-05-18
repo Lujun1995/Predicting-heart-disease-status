@@ -1,5 +1,5 @@
 ---
-title: "Supervised"
+title: "Supervised "
 date: "2019-5-15"
 output: pdf_document
 ---
@@ -31,20 +31,11 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
 ```{r}
-heart_disease = read_csv("./heart.csv") %>% 
+heart_disease = read_csv("./data/heart.csv") %>% 
     mutate(target = ifelse(target==1, 0, 1)) %>% 
     mutate(target=as.factor(target)) %>%
     mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
     mutate(target = relevel(target, "presence")) 
-#  %>%   arrange(-as.numeric(target))
-#set.seed(1)
-#trRows = createDataPartition(heart_disease$target, p = .75, list = FALSE)
-#train = heart_disease[trRows,]
-#test = heart_disease[-trRows,]
-
-# heart_disease2 = read_csv("..\\data\\heart.csv") %>% 
-#     mutate(target = ifelse(target==1, 0, 1)) %>% 
-#     mutate(target=as.factor(heart_disease$target)) 
 
 heart_disease = heart_disease %>% 
     filter(thal != 0) %>% 
@@ -58,17 +49,6 @@ heart_disease = heart_disease %>%
 
 model.x <- model.matrix(target~.,heart_disease)[,-1]
 model.y <- heart_disease$target
-
-# test = test %>% 
-#     mutate(sex=as.factor(sex),
-#            cp=as.factor(cp),
-#            fbs=as.factor(fbs),
-#            restecg=as.factor(restecg),
-#            exang=as.factor(exang),
-#            slope=as.factor(slope),
-#            thal=as.factor(thal))
-# test.x <- model.matrix(target~.,test)[,-1]
-# test.y <- test$target
 ```
 
 ## Regularized logistic
@@ -126,7 +106,6 @@ model.bayes = train(x = model.x,
                     tuneGrid = nbGrid,
                     metric = "ROC",
                     trControl = ctrl) 
-save(model.bayes, file = "./bayes.rda")
 
 ggplot(model.bayes, highlight = T)
 
@@ -162,7 +141,6 @@ bagging.class <- train(model.x, model.y,
                 metric = "ROC",
                 trControl = ctrl,
                 importance = "impurity")
-save(bagging.class, file = "./bagging.rda")
 
 ggplot(bagging.class, highlight = TRUE)
 bagging.class$bestTune
@@ -187,7 +165,6 @@ rf.class <- train(model.x, model.y,
                   metric = "ROC",
                   trControl = ctrl,
                   importance = "impurity")
-save(rf.class, file = "./rf.rda")
 
 rf.class$bestTune
 
@@ -218,7 +195,6 @@ boost.class = train(model.x, model.y,
                     distribution = "adaboost",
                     metric = "ROC",
                     verbose = FALSE)
-save(boost.class, file = "./boost.rda")
 
 boost.class$bestTune
 
@@ -266,8 +242,8 @@ ice_age.rf = rf.class %>%
     autoplot(train = heart_disease, alpha = .1) +
     ggtitle("Random forest, age")
 
-grid.arrange(ice_thalach.rf,  ice_ca.rf, 
-             ice_oldpeak.rf,  ice_age.rf, nrow = 2)
+grid.arrange(ice_ca.rf, ice_oldpeak.rf,   
+             ice_thalach.rf, ice_age.rf, nrow = 2)
 ```
 
 ## SVM ROC
@@ -301,6 +277,7 @@ ggplot(svmr.fit, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,10))
 svmr.fit$bestTune
+
 ```
 
 
@@ -323,9 +300,6 @@ ggplot(cnnet.fit, highlight = TRUE) +
     viridis::scale_color_viridis(discrete = TRUE) + 
     scale_shape_manual(values = seq(1,13))
 
-save(cnnet.fit, file = "./cnnet.rda")
-summary(cnnet.fit)
-
 cnnet.fit$bestTune
 ```
 
@@ -337,21 +311,33 @@ load(file = "./bagging.rda")
 load(file = "./bayes.rda")
 
 resamp = resamples(list(
-                        glm.fit = model.glm,
-                        lda.fit = model.lda,
-                        bayes.fit = model.bayes,
-                        boost = boost.class, 
-                        rf = rf.class, 
-                        bagging = bagging.class, 
-                        tree = tree.class,
-                        cnnet.fit = cnnet.fit,
-                        svml.fit = svml.fit,
-                        svmr.fit = svmr.fit
+                        Regularized_logistic = model.glm,
+                        LDA = model.lda,
+                        Naive_Bayes = model.bayes,
+                        Adaboost = boost.class, 
+                        Random_forests = rf.class, 
+                        Bagging = bagging.class, 
+                        Tree = tree.class,
+                        Neural_network = cnnet.fit,
+                        SVM_linear = svml.fit,
+                        SVM_gaussian = svmr.fit
                         ))
 summary(resamp)
 bwplot(resamp, metric = "ROC")
 ```
 
+## Variable importance
+```{r}
+library(gbm)
+varImp(model.glm)
+varImp(model.lda)
+varImp(model.bayes)
+varImp(boost.class)
+varImp(rf.class)
+varImp(bagging.class)
+varImp(tree.class)
+varImp(cnnet.fit)
+```
 
 
 
