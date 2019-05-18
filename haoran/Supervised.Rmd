@@ -304,11 +304,12 @@ cnnet.fit$bestTune
 ```
 
 ```{r}
-load(file = "./cnnet.rda") 
-load(file = "./boost.rda")
-load(file = "./rf.rda")
-load(file = "./bagging.rda")
-load(file = "./bayes.rda")
+load(file = "./haoran/saved_results/cnnet.rda") 
+load(file = "./haoran/saved_results/boost.rda")
+load(file = "./haoran/saved_results/rf.rda")
+load(file = "./haoran/saved_results/bagging.rda")
+load(file = "./haoran/saved_results/bayes.rda")
+load(file = "./haoran/saved_results/svmr.rda")
 
 resamp = resamples(list(
                         Regularized_logistic = model.glm,
