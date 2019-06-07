@@ -1,0 +1,221 @@
+---
+title: "clean_unsuper"
+author: "Yun He"
+date: "5/15/2019"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(caret)
+library(factoextra)
+library(gridExtra)
+library(corrplot)
+library(RColorBrewer)
+library(gplots)
+library(tableone)
+library(magrittr)
+library(officer)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+```
+
+## data cleaning
+```{r message=F}
+heart_disease = read_csv("/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/data/heart.csv") %>% 
+    mutate(target = ifelse(target==1, 0, 1)) %>% 
+    mutate(target=as.factor(target)) %>%
+    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
+    mutate(target = relevel(target, "presence")) 
+
+heart_disease = heart_disease %>% 
+    filter(thal != 0) %>% 
+    mutate(sex=as.factor(sex),
+           cp=as.factor(cp),
+           fbs=as.factor(fbs),
+           restecg=as.factor(restecg),
+           exang=as.factor(exang),
+           slope=as.factor(slope),
+           thal=factor(thal))
+
+model.x <- model.matrix(target~.,heart_disease)[,-1]
+model.y <- heart_disease$target
+```
+
+## EDA
+
+### check missing value
+```{r}
+sapply(X = heart_disease, FUN = function(x) sum(is.na(x)))
+```
+
+### continuous
+```{r}
+heart_disease %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = target, y = value, fill = target)) +
+    geom_boxplot(alpha = 0.6) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+
+heart_disease %>%
+    select(age, trestbps, chol, thalach, oldpeak, target) %>% 
+    gather(-target, key = "var", value = "value") %>% 
+    ggplot(aes(x = value, fill = target)) +
+    geom_density(alpha = 0.6) +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw()
+```
+
+### corr matrix
+```{r}
+library(ggcorrplot)
+heart_continu = heart_disease %>%
+    select(age, trestbps, chol, thalach, oldpeak)
+corr =  round(cor(heart_continu), 4)
+
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   outline.col = "white",
+   ggtheme = ggplot2::theme_bw,
+   lab = T,
+   colors =  c("#4682B4", "white", "#FF8C00"))  
+```
+
+### categorical
+```{r}
+barplot = function(var){
+    ggplot(heart_disease, aes_string(x = var,  group = "target")) + 
+    geom_bar(aes(y = ..prop.., fill = factor(..x..)),
+             stat = "count", alpha = 0.8) +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y = ..prop.. ), 
+              stat = "count", vjust = 0, size = 2) +
+    labs(y = "Percent", fill = var) +
+    facet_grid(~target) +
+    scale_y_continuous(labels = scales::percent) +
+        theme_bw()
+}
+
+a1 = barplot("sex")
+a2 = barplot("fbs")
+a3 = barplot("exang")
+a4 = barplot("slope")
+a5 = barplot("thal")
+a6 = barplot("restecg")
+a7 = barplot("cp")
+a8 = barplot("ca")
+
+gridExtra::grid.arrange(a1, a2, a3, a4,
+                        a5, a6, a7, a8,
+                        ncol = 3, nrow = 3)
+```
+
+## tableone
+
+```{r}
+tableOne = CreateTableOne(vars = c("age", "trestbps", "chol", "thalach",
+                                   "oldpeak", "sex", "exang", "fbs", 
+                                   "slope", "thal", "restecg", "cp","ca"
+                                   ), 
+                          strata = c("target"), 
+                          data = heart_disease,
+                          factorVars = c("sex", "fbs", "exang", "slope",
+                                         "thal", "restecg", "cp", "ca"))
+
+table = print(tableOne, cramVars = c("sex", "exang", "fbs"))
+```
+
+
+## Unsupervised learning
+
+## K-means
+```{r}
+set.seed(1)
+
+model.x_scale = scale(model.x)
+
+rownames(model.x_scale) = paste(heart_disease$target, 1:228, sep = "-")
+
+
+km = kmeans(model.x_scale, centers = 2, nstart = 20)
+km_vis = fviz_cluster(list(data = model.x_scale, 
+                            cluster = km$cluster),
+                       ellipse.type = "convex",
+                       geom = c("point","text"),
+                       ggtheme = theme_bw(),
+                       labelsize = 7, palette = "Dark2") + 
+    labs(title = "K-means")
+
+km_vis
+```
+
+
+```{r}
+heart_kmeans = heart_disease
+heart_kmeans$kmean = km$cluster
+heart_kmeans %>% ggplot(aes(x = target, fill = target)) +
+    geom_bar(alpha = 0.5) +
+    facet_grid(.~kmean) +
+    theme_bw()
+
+
+center = t(apply(km$centers, 1, function(r)r*attr(model.x_scale,'scaled:scale') + attr(model.x_scale, 'scaled:center')))
+
+center
+```
+
+## PCA
+```{r}
+pca <- prcomp(model.x_scale)
+fviz_eig(pca, addlabels = TRUE)
+
+fviz_pca_ind(pca,
+             habillage = model.y,
+             label = "none",
+             addEllipses = TRUE)
+```
+
+
+## Hierarchical clustering
+```{r}
+hd_1 = heart_disease %>% 
+    mutate(target = ifelse(target == "absence",1,0))
+train.hc = model.x_scale %>% as.data.frame() %>% 
+    mutate(target = as.character(hd_1$target),
+           num = as.character(1:301)) %>% 
+    mutate(name = paste(target,".", num)) %>% 
+    select(-num, -target) %>% 
+    column_to_rownames(var = "name") %>% scale()
+    
+```
+
+```{r}
+
+hc.heart = hclust(dist(train.hc), method = "complete")
+
+
+fviz_dend(hc.heart, k = 4,
+          cex = 0.4,
+          palette = "jco",
+          color_labels_by_k = TRUE,
+          rect = TRUE, rect_fill = TRUE, rect_border = "jco",
+          labels_track_height = 0.8)
+```
+
+```{r}
+col1 <- colorRampPalette(brewer.pal(9, "GnBu"))(100)
+
+heatmap.2(t(train.hc),
+        col = col1, keysize = 1, key.par = list(cex = .3),
+        cexRow = 1, 
+        #dendrogram = "col",
+        trace = "none", key = TRUE, cexCol = 0.4,
+        margins = c(5, 5))
+```

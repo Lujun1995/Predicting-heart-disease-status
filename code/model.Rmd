@@ -1,0 +1,517 @@
+---
+title: "Supervised "
+date: "2019-5-15"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ISLR)
+library(factoextra)
+library(gridExtra)
+library(corrplot)
+library(RColorBrewer)
+library(gplots)
+library(tidyverse)
+library(caret)
+library(MLmetrics)
+library(rpart.plot)
+library(randomForest)
+library(pdp)
+library(glmnet)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+
+```
+
+```{r message=FALSE}
+heart_disease = read_csv("/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/data/heart.csv") %>% 
+    mutate(target = ifelse(target==1, 0, 1)) %>% 
+    mutate(target=as.factor(target)) %>%
+    mutate(target=as.factor(ifelse(target==0, "absence", "presence")))%>% 
+    mutate(target = relevel(target, "presence")) 
+
+heart_disease = heart_disease %>% 
+    filter(thal != 0) %>% 
+    mutate(sex=as.factor(sex),
+           cp=as.factor(cp),
+           fbs=as.factor(fbs),
+           restecg=as.factor(restecg),
+           exang=as.factor(exang),
+           slope=as.factor(slope),
+           thal=factor(thal))
+
+model.x <- model.matrix(target~.,heart_disease)[,-1]
+model.y <- heart_disease$target
+```
+
+## Regularized logistic
+```{r}
+ctrl = trainControl(method = "cv",
+                    classProbs = TRUE,
+                    summaryFunction = twoClassSummary)
+
+
+glmnGrid <- expand.grid(.alpha = seq(0, 0.5, length = 10),
+                        .lambda = exp(seq(-10,-1, length = 100)))
+set.seed(1)
+model.glm <- train(x = model.x,
+                   y = model.y,
+                   method = "glmnet",
+                   tuneGrid = glmnGrid,
+                   metric = "ROC",
+                   trControl = ctrl)
+
+ggplot(model.glm, highlight = T)  +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,10))
+
+model.glm$bestTune
+```
+
+```{r}
+glmnet = glmnet(x = model.x, y = model.y, 
+       family = "binomial", 
+       alpha = 0, 
+       lambda = 0.1946867)
+broom::tidy(glmnet)
+```
+
+
+## LDA
+```{r, message=FALSE}
+set.seed(1)
+model.lda = train(x = model.x,
+                   y = model.y,
+                  method = "lda",
+                  metric = "ROC",
+                  trControl = ctrl)
+```
+
+
+## Naive bayes
+```{r, warning=FALSE, eval=F}
+set.seed(1)
+nbGrid = expand.grid(usekernel = c(FALSE,TRUE),
+                     fL = 1, adjust = seq(0, 4, length = 20))
+model.bayes = train(x = model.x,
+                    y = model.y,
+                    method = "nb",
+                    tuneGrid = nbGrid,
+                    metric = "ROC",
+                    trControl = ctrl) 
+
+ggplot(model.bayes, highlight = T)
+
+model.bayes$bestTune
+```
+
+##Tree
+
+```{r, message=FALSE}
+set.seed(1)
+tree.class <- train(model.x, model.y,
+                    method = "rpart",
+                    tuneGrid = data.frame(cp = exp(seq(-10,-3, len = 20))),
+                    trControl = ctrl,
+                    metric = "ROC")
+ggplot(tree.class, highlight = TRUE)
+tree.class$bestTune
+
+rpart.plot(tree.class$finalModel)
+```
+
+##Bagging
+
+```{r, message=FALSE, eval=F}
+bagging.grid <- expand.grid(mtry = 18,
+                            splitrule = "gini",
+                            min.node.size = 10:50)
+
+set.seed(1)
+bagging.class <- train(model.x, model.y,
+                method = "ranger",
+                tuneGrid = bagging.grid,
+                metric = "ROC",
+                trControl = ctrl,
+                importance = "impurity")
+
+ggplot(bagging.class, highlight = TRUE)
+bagging.class$bestTune
+
+barplot(sort(ranger::importance(bagging.class$finalModel),
+             decreasing = FALSE),
+las = 2, horiz = TRUE, cex.names = 0.7,
+col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
+```
+
+##Random Forest
+
+```{r, message=FALSE, eval=F}
+rf.grid <- expand.grid(mtry = 1:6,
+                       splitrule = "gini",
+                       min.node.size = seq(1,191, by = 2))
+
+set.seed(1)
+rf.class <- train(model.x, model.y,
+                  method = "ranger",
+                  tuneGrid = rf.grid,
+                  metric = "ROC",
+                  trControl = ctrl,
+                  importance = "impurity")
+
+rf.class$bestTune
+
+ggplot(rf.class, highlight = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,7))
+
+barplot(sort(ranger::importance(rf.class$finalModel), decreasing = FALSE),
+las = 2, horiz = TRUE, cex.names = 0.7,
+col = colorRampPalette(colors = c("darkred","white","darkblue"))(18))
+
+```
+
+##Boosting
+
+```{r fig.height=12, fig.width=12, eval=F}
+boost.grid <- expand.grid(n.trees = seq(20, 1700, by = 25),
+                          interaction.depth = 1:6,
+                          shrinkage =  seq(0.005, 0.06, by = 0.005),
+                          n.minobsinnode = 1)
+
+set.seed(1)
+# Adaboost loss function
+boost.class = train(model.x, model.y,
+                    tuneGrid = boost.grid,
+                    trControl = ctrl,
+                    method = "gbm",
+                    distribution = "adaboost",
+                    metric = "ROC",
+                    verbose = FALSE)
+
+boost.class$bestTune
+
+ggplot(boost.class, highlight = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(0,11))
+
+summary(boost.class$finalModel, las = 2, cBars = 19, cex.names = 0.6)
+```
+
+## SVM ROC
+```{r}
+## linear boundary
+set.seed(1)
+svml.fit <- train(target~., 
+                  data = heart_disease, 
+                  method = "svmLinear2",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
+                  trControl = ctrl,
+                  metric = "ROC")
+
+ggplot(svml.fit, highlight = TRUE)
+svml.fit$bestTune
+
+```
+
+```{r, eval=F}
+## radial kernel
+svmr.grid <- expand.grid(C = exp(seq(-4,5,len=50)),
+                         sigma = exp(seq(-5,-2,len=10)))
+set.seed(1)             
+svmr.fit <- train(target~., 
+                  data = heart_disease,
+                  method = "svmRadial",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = svmr.grid,
+                  trControl = ctrl,
+                  metric = "ROC")
+
+ggplot(svmr.fit, highlight = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,10))
+svmr.fit$bestTune
+```
+
+
+## Neural network
+```{r, message=FALSE, eval=F}
+nnetGrid <- expand.grid(size = seq(from = 16, to = 30, by = 2), 
+                        decay = seq(from = 5, to = 8, length = 30))
+
+set.seed(1)
+cnnet.fit <- train(target~.,
+                   heart_disease,
+                   method = "nnet",
+                   tuneGrid = nnetGrid,
+                   preProcess = c("center","scale"),
+                   trControl = ctrl,
+                   metric = "ROC",
+                   trace = FALSE)
+
+ggplot(cnnet.fit, highlight = TRUE) + 
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,13))
+
+cnnet.fit$bestTune
+```
+
+```{r}
+load(file = "/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/code/saved_results/cnnet.rda") 
+load(file = "/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/code/saved_results/boost.rda")
+load(file = "/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/code/saved_results/rf.rda")
+load(file = "/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/code/saved_results/bagging.rda")
+load(file = "/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/code/saved_results/bayes.rda")
+load(file = "/Users/pro/Desktop/R/DSII/Predicting-heart-disease-status/code/saved_results/svmr.rda")
+
+resamp = resamples(list(
+                        Regularized_logistic = model.glm,
+                        LDA = model.lda,
+                        Naive_Bayes = model.bayes,
+                        Adaboost = boost.class, 
+                        Random_forests = rf.class, 
+                        Bagging = bagging.class, 
+                        Tree = tree.class,
+                        Neural_network = cnnet.fit,
+                        SVM_linear = svml.fit,
+                        SVM_gaussian = svmr.fit
+                        ))
+summary(resamp)
+bwplot(resamp, metric = "ROC")
+```
+
+###centered ICE
+
+```{r}
+ice_thalach.rf = rf.class %>%
+    pdp::partial(pred.var = "thalach",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1) +
+    ggtitle("Random forest, thalach")
+
+ice_ca.rf = rf.class %>%
+    pdp::partial(pred.var = "ca",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1, 
+             xlab = "number of major vessels") +
+    ggtitle("Random forest, number of major vessels")
+
+ice_oldpeak.rf =  rf.class %>%
+    partial(pred.var = "oldpeak",
+            grid.resolution = 100,
+            ice = TRUE,
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1, 
+             xlab = "ST depression") +
+    ggtitle("Random forest, ST depression")
+
+ice_age.rf = rf.class %>%
+    pdp::partial(pred.var = "age",
+            grid.resolution = 100,
+            ice = TRUE, 
+            prob = TRUE) %>%
+    autoplot(train = heart_disease, alpha = .1) +
+    ggtitle("Random forest, age")
+
+grid.arrange(ice_ca.rf, ice_oldpeak.rf,   
+             ice_thalach.rf, ice_age.rf, nrow = 2)
+```
+
+## Variable importance
+```{r}
+library(gbm)
+varImp(model.glm)
+varImp(model.lda)
+varImp(model.bayes)
+varImp(boost.class)
+varImp(rf.class)
+varImp(bagging.class)
+varImp(tree.class)
+varImp(cnnet.fit)
+```
+
+
+
+
+
+
+
+
+
+
+#Comparing accuracy
+
+##Regularized logistic
+```{r}
+ctrl2 <- trainControl(method = "cv")
+
+glmnGrid <- expand.grid(.alpha = 0,
+                        .lambda = 0.2335065)
+
+set.seed(1)
+model.glm.2 <- train(x = model.x,
+                   y = model.y,
+                   tuneGrid = glmnGrid,
+                   method = "glmnet",
+                   metric = "Accuracy",
+                   trControl = ctrl2)
+
+```
+
+##LDA
+```{r}
+set.seed(1)
+model.lda.2 = train(x = model.x,
+                  y = model.y,
+                  method = "lda",
+                  metric = "Accuracy",
+                  trControl = ctrl2)
+```
+
+##Naive bayes
+```{r warning=FALSE}
+set.seed(1)
+nbGrid = expand.grid(usekernel = TRUE,
+                     fL = 1, adjust = 1.473684)
+model.bayes.2 = train(x = model.x,
+                    y = model.y,
+                    method = "nb",
+                    tuneGrid = nbGrid,
+                    metric = "Accuracy",
+                    trControl = ctrl2) 
+```
+
+##Tree
+```{r}
+set.seed(1)
+tree.class.2 <- train(model.x, model.y,
+                    method = "rpart",
+                    tuneGrid = data.frame(cp = 0.003776539),
+                    trControl = ctrl2,
+                    metric = "Accuracy")
+```
+
+##Bagging
+```{r}
+bagging.grid <- expand.grid(mtry = 18,
+                            splitrule = "gini",
+                            min.node.size = 40)
+
+set.seed(1)
+bagging.class.2 <- train(model.x, model.y,
+                method = "ranger",
+                tuneGrid = bagging.grid,
+                metric = "Accuracy",
+                trControl = ctrl2,
+                importance = "impurity")
+```
+
+##Random Forest
+```{r}
+rf.grid <- expand.grid(mtry = 1,
+                       splitrule = "gini",
+                       min.node.size = 25)
+
+set.seed(1)
+rf.class.2 <- train(model.x, model.y,
+                  method = "ranger",
+                  tuneGrid = rf.grid,
+                  metric = "Accuracy",
+                  trControl = ctrl2,
+                  importance = "impurity")
+```
+
+##Boosting
+```{r}
+boost.grid <- expand.grid(n.trees = 1370,
+                          interaction.depth = 1,
+                          shrinkage = 0.015,
+                          n.minobsinnode = 1)
+
+set.seed(1)
+# Adaboost loss function
+boost.class.2 = train(model.x, model.y,
+                    tuneGrid = boost.grid,
+                    trControl = ctrl2,
+                    method = "gbm",
+                    distribution = "adaboost",
+                    metric = "Accuracy",
+                    verbose = FALSE)
+```
+
+## Neural network
+```{r}
+nnetGrid <- expand.grid(size = 18, 
+                        decay = 6.448276)
+
+set.seed(1)
+cnnet.fit.2 <- train(target~.,
+                   heart_disease,
+                   method = "nnet",
+                   tuneGrid = nnetGrid,
+                   preProcess = c("center","scale"),
+                   trControl = ctrl2,
+                   metric = "Accuracy",
+                   trace = FALSE)
+```
+
+## SVM
+```{r, message=FALSE}
+## linear boundary
+set.seed(1)
+svml.fit.2 <- train(target~., 
+                  data = heart_disease, 
+                  method = "svmLinear2",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = data.frame(cost = exp(seq(-7,-2,len=50))),
+                  trControl = ctrl2)
+
+ggplot(svml.fit, highlight = TRUE)
+svml.fit$bestTune
+
+## radial kernel
+svmr.grid <- expand.grid(C = exp(seq(-4,5,len=50)),
+                         sigma = exp(seq(-5,-2,len=10)))
+set.seed(1)             
+svmr.fit.2 <- train(target~., 
+                  data = heart_disease,
+                  method = "svmRadial",
+                  preProcess = c("center", "scale"),
+                  tuneGrid = svmr.grid,
+                  trControl = ctrl2)
+
+ggplot(svmr.fit, highlight = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE) + 
+    scale_shape_manual(values = seq(1,10))
+svmr.fit$bestTune
+```
+
+```{r}
+resamp = resamples(list(
+                        glm.fit = model.glm.2,
+                        lda.fit = model.lda.2,
+                        bayes.fit = model.bayes.2,
+                        boost = boost.class.2, 
+                        rf = rf.class.2, 
+                        bagging = bagging.class.2, 
+                        tree = tree.class.2,
+                        cnnet.fit = cnnet.fit.2,
+                        svml.fit = svml.fit.2,
+                        svmr.fit = svmr.fit.2
+                        ))
+summary(resamp)
+bwplot(resamp)
+```
+
